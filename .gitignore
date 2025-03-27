@@ -133,3 +133,5 @@ dask-worker-space/
 
 # Vscode
 .vscode/
+
+cstar/externals/
