@@ -15,3 +15,6 @@ class ConfiguredBaseModel(BaseModel):
                 case (".json"):
                     data = json.load(f)
         return cls.model_validate(data)
+
+    class Config:
+        extra = "allow"
