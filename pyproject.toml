@@ -58,6 +58,11 @@ exclude = "properties|asv_bench|docs"
 # Configuration for ruff linter and formatter
 [tool.ruff]
 fix = true
+force-exclude=true
+extend-exclude = ["docs", "*.ipynb"]
+
+[tool.ruff.format]
+exclude = ["docs", "*.ipynb"]
 
 [tool.pre-commit]
 config = ".pre-commit-config.yaml"
