@@ -1,7 +1,7 @@
-from collections import OrderedDict
-from enum import StrEnum, auto
+
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, Optional, TextIO, ClassVar, Annotated, Callable
+from typing import Any, Optional, ClassVar
 
 import numpy as np
 
@@ -12,13 +12,10 @@ from pydantic import (
     BaseModel,
     RootModel,
     model_serializer,
-    BeforeValidator,
-    PlainSerializer,
     FieldSerializationInfo,
     field_serializer,
 )
 
-from pydantic.dataclasses import dataclass
 
 def _single_line_serializer(data: str | float, info: FieldSerializationInfo) -> str:
     name = info.field_name
@@ -34,31 +31,7 @@ def _format_value(val: float | str) -> str:
         elif abs(val) < 1e-2 or abs(val) >= 1e4:
             return f"{val:.6E}".replace("E+00", "E0")
     return str(val)
-#
-# FormattedFloat = Annotated[
-#     float,
-#     # BeforeValidator(lambda x: float(x.upper().replace("D", "E"))),
-#     PlainSerializer(_single_line_serializer, return_type=str)
-# ]
-#
-# FormattedString = Annotated[
-#     str,
-#     # BeforeValidator(lambda x: str(x)),
-#     PlainSerializer(_single_line_serializer, return_type=str)
-# ]
-#
-# FormattedPath = Annotated[
-#     Path,
-#     BeforeValidator(lambda x: Path(x)),
-#     PlainSerializer(_single_line_serializer, return_type=str)
-# ]
 
-# FormattedFloatList = Annotated[
-#     list[float],
-#     BeforeValidator(lambda lst: [float(x.upper().replace("D", "E")) for x in lst]),
-#     PlainSerializer(lambda lst: " ".join(_format_value(x) for x in lst))
-#
-# ]
 
 class SerializeModes(StrEnum):
     KV = "kv"
@@ -82,13 +55,6 @@ class RomsSection(BaseModel):
     def value_joiner(self):
         return "\n    " if self.multi_line else "    "
 
-    # def serialize_mapper(self) -> Callable:
-    #     mapping = {
-    #         SerializeModes.KV: self._kv_serializer,
-    #         SerializeModes.LIST: self._list_serializer,
-    #         SerializeModes.SINGLE: self._single_line_serializer
-    #     }
-    #     return mapping[self.serialize_mode]
 
     def _kv_serializer(self) -> str:
         data = {k: getattr(self, k) for k in self.key_order}
@@ -628,10 +594,6 @@ class ROMSRuntimeSettings(BaseModel):
         inner = ", ".join(f"{k}={repr(v)}" for k, v in attrs.items() if v is not None)
         return f"{self.__class__.__name__}({inner})"
 
-    # @model_serializer()
-    # def serialize(self) -> str:
-    #     string = ""
-    #     for f in self.
 
     def to_file(self, filepath: Path | str) -> None:
         """Write the current settings to a ROMS-compatible `.in` file.
@@ -672,74 +634,6 @@ class ROMSRuntimeSettings(BaseModel):
                 if getattr(self, field) is None:
                     continue
                 f.write(self.model_dump()[field])
-
-            #
-            # # Non-optional
-            # write_section("title", self.title)
-            # write_section("time_stepping", self.time_stepping)
-            # write_section("bottom_drag", self.bottom_drag)
-            # write_section("initial", self.initial, multi_line=True)
-            # write_section("forcing", self.forcing, multi_line=True)
-            # write_section("output_root_name", self.output_root_name)
-            #
-            # if self.s_coord:
-            #     write_section("S-coord", self.s_coord)
-            #
-            # if self.grid:
-            #     write_section("grid", str(self.grid))
-            #
-            # if self.marbl_biogeochemistry:
-            #     write_section(
-            #         "MARBL_biogeochemistry",
-            #         self.marbl_biogeochemistry,
-            #         multi_line=True,
-            #     )
-            #
-            # if self.lateral_visc is not None:
-            #     write_section("lateral_visc", _format_value(self.lateral_visc))
-            #
-            # if self.rho0 is not None:
-            #     write_section("rho0", _format_value(self.rho0))
-            #
-            # if self.lin_rho_eos:
-            #     write_section("lin_rho_eos", self.lin_rho_eos)
-            #
-            # if self.gamma2 is not None:
-            #     write_section("gamma2", _format_value(self.gamma2))
-            #
-            # if self.tracer_diff2 is not None:
-            #     write_section("tracer_diff2", _format_float_list(self.tracer_diff2))
-            #
-            # if self.vertical_mixing:
-            #     write_section(
-            #         "vertical_mixing",
-            #         OrderedDict(
-            #             {
-            #                 "Akv_bak": self.vertical_mixing[0],
-            #                 "Akt_bak": _format_float_list(
-            #                     self.vertical_mixing[1]
-            #                 ),
-            #             }
-            #         ),
-            #     )
-            #
-            # if self.my_bak_mixing is not None:
-            #     write_section("MY_bak_mixing", self.my_bak_mixing)
-            #
-            # if self.sss_correction is not None:
-            #     write_section("SSS_correction", _format_value(self.sss_correction))
-            #
-            # if self.sst_correction is not None:
-            #     write_section("SST_correction", _format_value(self.sst_correction))
-            #
-            # if self.ubind is not None:
-            #     write_section("ubind", _format_value(self.ubind))
-            #
-            # if self.v_sponge is not None:
-            #     write_section("v_sponge", _format_value(self.v_sponge))
-            #
-            # if self.climatology is not None:
-            #     write_section("climatology", str(self.climatology))
 
 if __name__ == "__main__":
     ff = "/Users/eilerman/Downloads/pacmed12km_Y2000.in"
