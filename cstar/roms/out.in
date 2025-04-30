@@ -1,0 +1,86 @@
+title:
+    pacmed12km , 12km resolution
+
+time_stepping: ntimes dt ndtfast ninfo
+    35040    900    60    2
+
+bottom_drag: rdrg rdrg2 zob
+    0.    0.    0.02
+
+initial: nrrec ininame
+    1
+    frc_partitioned_40x16/pacmed_rst.20010131100008.nc
+
+forcing:
+    frc_partitioned_40x16/pacmed12_frc.199912.nc
+    frc_partitioned_40x16/pacmed12_frc.200001.nc
+    frc_partitioned_40x16/pacmed12_frc.200002.nc
+    frc_partitioned_40x16/pacmed12_frc.200003.nc
+    frc_partitioned_40x16/pacmed12_frc.200004.nc
+    frc_partitioned_40x16/pacmed12_frc.200005.nc
+    frc_partitioned_40x16/pacmed12_frc.200006.nc
+    frc_partitioned_40x16/pacmed12_frc.200007.nc
+    frc_partitioned_40x16/pacmed12_frc.200008.nc
+    frc_partitioned_40x16/pacmed12_frc.200009.nc
+    frc_partitioned_40x16/pacmed12_frc.200010.nc
+    frc_partitioned_40x16/pacmed12_frc.200011.nc
+    frc_partitioned_40x16/pacmed12_frc.200012.nc
+    frc_partitioned_40x16/pacmed12_frc.200001.nc
+    frc_partitioned_40x16/pacmed12_LFfrc_1999.nc
+    frc_partitioned_40x16/pacmed12_LFfrc_2000.nc
+    frc_partitioned_40x16/pacmed12_LFfrc_2001.nc
+    frc_partitioned_40x16/pacmed12_srfflx_1999.nc
+    frc_partitioned_40x16/pacmed12_srfflx_2000.nc
+    frc_partitioned_40x16/pacmed12_srfflx_2001.nc
+    frc_partitioned_40x16/pacmed12_updtbgcflx_1999_MARBL.nc
+    frc_partitioned_40x16/pacmed12_updtbgcflx_2000_MARBL.nc
+    frc_partitioned_40x16/pacmed12_updtbgcflx_2001_MARBL.nc
+    frc_partitioned_40x16/pacmed12_bry_1999.nc
+    frc_partitioned_40x16/pacmed12_bry_2000.nc
+    frc_partitioned_40x16/pacmed12_bry_2001.nc
+    frc_partitioned_40x16/pacmed12_bgcbry_1999_MARBL.nc
+    frc_partitioned_40x16/pacmed12_bgcbry_2000_MARBL.nc
+    frc_partitioned_40x16/pacmed12_bgcbry_2001_MARBL.nc
+    frc_partitioned_40x16/pacmed12_default_bgcbry_MARBL.nc
+    frc_partitioned_40x16/pacmed12_tidestpxo9_19950101.nc
+    frc_partitioned_40x16/pacmed12_riv_MARBL.nc
+
+output_root_name:
+    output/pacmed
+
+S-coord: theta_s theta_b tcline
+    6.0    6.0    250.0
+
+grid:
+    frc_partitioned_40x16/pacmed12_grd.nc
+
+MARBL_biogeochemistry: marbl_namelist_fname marbl_tracer_list_fname marbl_diag_list_fname
+    marbl_in
+    marbl_tracers_output_list
+    marbl_diagnostic_output_list
+
+lateral_visc:
+    0.
+
+rho0:
+    1027.4
+
+gamma2:
+    1.0
+
+tracer_diff2:
+    [0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.
+ 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0. 0.]
+
+vertical_mixing:
+    (0.0001, array([0., 0.]))
+
+sss_correction:
+    7.777
+
+ubind:
+    0.2
+
+v_sponge:
+    500.0
+

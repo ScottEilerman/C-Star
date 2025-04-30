@@ -1,13 +1,246 @@
 from collections import OrderedDict
+from enum import StrEnum, auto
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Optional, TextIO, ClassVar, Annotated, Callable
 
 import numpy as np
 
+
 from cstar.base.utils import _list_to_concise_str
 
+from pydantic import (
+    BaseModel,
+    RootModel,
+    model_serializer,
+    BeforeValidator,
+    PlainSerializer,
+    FieldSerializationInfo,
+    field_serializer,
+)
 
-class ROMSRuntimeSettings:
+from pydantic.dataclasses import dataclass
+
+def _single_line_serializer(data: str | float, info: FieldSerializationInfo) -> str:
+    name = info.field_name
+    string = f"{name}:\n"
+    string += f"    {_format_value(data)}\n"
+    string += "\n"
+    return string
+
+def _format_value(val: float | str) -> str:
+    if isinstance(val, float):
+        if val == 0.0:
+            return "0."
+        elif abs(val) < 1e-2 or abs(val) >= 1e4:
+            return f"{val:.6E}".replace("E+00", "E0")
+    return str(val)
+#
+# FormattedFloat = Annotated[
+#     float,
+#     # BeforeValidator(lambda x: float(x.upper().replace("D", "E"))),
+#     PlainSerializer(_single_line_serializer, return_type=str)
+# ]
+#
+# FormattedString = Annotated[
+#     str,
+#     # BeforeValidator(lambda x: str(x)),
+#     PlainSerializer(_single_line_serializer, return_type=str)
+# ]
+#
+# FormattedPath = Annotated[
+#     Path,
+#     BeforeValidator(lambda x: Path(x)),
+#     PlainSerializer(_single_line_serializer, return_type=str)
+# ]
+
+# FormattedFloatList = Annotated[
+#     list[float],
+#     BeforeValidator(lambda lst: [float(x.upper().replace("D", "E")) for x in lst]),
+#     PlainSerializer(lambda lst: " ".join(_format_value(x) for x in lst))
+#
+# ]
+
+class SerializeModes(StrEnum):
+    KV = "kv"
+    LIST = "list"
+    SINGLE = "single"
+
+class RomsSection(BaseModel):
+
+    section_name: ClassVar[str]
+    multi_line: ClassVar[bool] = False
+    key_order: ClassVar[list[str]]
+    serialize_mode: ClassVar[SerializeModes] = SerializeModes.KV
+
+    def __init__(self, *args, **kwargs):
+        if args:
+            super().__init__(**{k: args[i] for i, k in enumerate(self.key_order)})
+        else:
+            super().__init__(**kwargs)
+
+    @property
+    def value_joiner(self):
+        return "\n    " if self.multi_line else "    "
+
+    # def serialize_mapper(self) -> Callable:
+    #     mapping = {
+    #         SerializeModes.KV: self._kv_serializer,
+    #         SerializeModes.LIST: self._list_serializer,
+    #         SerializeModes.SINGLE: self._single_line_serializer
+    #     }
+    #     return mapping[self.serialize_mode]
+
+    def _kv_serializer(self) -> str:
+        data = {k: getattr(self, k) for k in self.key_order}
+        keys_line = " ".join(data.keys())
+        string = ""
+        values = self.value_joiner.join(_format_value(v) for v in data.values())
+        string += f"{self.section_name}: {keys_line}\n"
+        string += f"    {values}\n"
+        string += "\n"
+        return string
+
+    def _list_serializer(
+        self,
+    ) -> str:
+        data = self.root
+        string = f"{self.section_name}:\n"
+        values = "    " + self.value_joiner.join([_format_value(v) for v in data]) + "\n"
+        string += values
+        string += "\n"
+        return string
+
+    def _single_line_serializer(
+        self, data: str
+    ) -> str:
+        string = f"{self.section_name}:\n"
+        string += f"    {data}\n"
+        string += "\n"
+        return string
+
+    @model_serializer()
+    def serialize(self) -> str:
+        mapping = {
+            SerializeModes.KV: self._kv_serializer,
+            SerializeModes.LIST: self._list_serializer,
+            SerializeModes.SINGLE: self._single_line_serializer
+        }
+
+        return mapping[self.serialize_mode]()
+
+
+class TimeStepping(RomsSection):
+    ntimes: int
+    dt: int
+    ndtfast: int
+    ninfo: int
+
+    section_name = "time_stepping"
+    key_order = ["ntimes", "dt", "ndtfast", "ninfo"]
+
+
+
+class BottomDrag(RomsSection):
+    rdrg: float
+    rdrg2: float
+    zob: float
+    Cdb_min: float | None = None
+    Cdb_max: float | None = None
+
+    section_name = "bottom_drag"
+    key_order = ["rdrg", "rdrg2", "zob"]
+
+
+
+class InitialBlock(RomsSection):
+    nrrec: int
+    ininame: str | Path
+
+    section_name = "initial"
+    multi_line = True
+    key_order = ["nrrec", "ininame"]
+
+
+class ForcingBlock(RootModel, RomsSection):
+    root: list[Path]
+
+    section_name = "forcing"
+    multi_line = True
+    serialize_mode = SerializeModes.LIST
+
+
+
+class MarblBGC(RomsSection):
+    marbl_namelist_fname: Path
+    marbl_tracer_list_fname: Path
+    marbl_diag_list_fname: Path
+
+    section_name = "MARBL_biogeochemistry"
+    multi_line = True
+    key_order = ["marbl_namelist_fname",
+        "marbl_tracer_list_fname",
+        "marbl_diag_list_fname",]
+
+
+
+class SCoord(RomsSection):
+    theta_s: float
+    theta_b: float
+    tcline: float
+
+    section_name = "S-coord"
+    key_order = ["theta_s", "theta_b", "tcline"]
+
+
+
+class LinRhoEos(RomsSection):
+    Tcoef: float
+    T0: float
+    Scoef: float
+    S0: float
+
+    section_name = "lin_rho_eos"
+    key_order = ["Tcoef",
+        "T0",
+        "Scoef",
+        "S0",]
+
+class ROMSRuntimeSettings(BaseModel):
+    title: str
+    time_stepping: TimeStepping
+    bottom_drag: BottomDrag
+    initial: InitialBlock
+    forcing: ForcingBlock
+    output_root_name: str
+    marbl_biogeochemistry: MarblBGC | None
+    s_coord: SCoord | None
+    rho0: float
+    lin_rho_eos: LinRhoEos | None
+    lateral_visc: float | None
+    gamma2: float | None
+    tracer_diff2: np.ndarray | None
+    vertical_mixing: tuple[float, np.ndarray] | None
+    my_bak_mixing: list[float] | None
+    sss_correction: float | None
+    sst_correction: float | None
+    ubind: float | None
+    v_sponge: float | None
+    grid: Path | None
+    climatology: str | None
+
+    model_config = {"arbitrary_types_allowed": True}
+
+    @field_serializer("*")
+    def single_line_serializer(self, data: str | float, info: FieldSerializationInfo) -> str:
+        if isinstance(data, RomsSection):
+            return data.model_dump()
+        name = info.field_name
+        string = f"{name}:\n"
+        string += f"    {_format_value(data)}\n"
+        string += "\n"
+        return string
+
+# class ROMSRuntimeSettings:
     """Container for reading, manipulating, and writing ROMS `.in` runtime configuration
     files.
 
@@ -64,182 +297,10 @@ class ROMSRuntimeSettings:
         Climatology file path.
     """
 
-    def __init__(
-        self,
-        # Non-optional:
-        title: str,
-        time_stepping: list[int],
-        bottom_drag: list[float],
-        initial: tuple[int, str | Path | None],
-        forcing: list[str | Path],
-        output_root_name: str,
-        # Optional (cpp-key dependent):
-        s_coord: Optional[list[float]] = None,
-        rho0: Optional[float] = None,
-        lin_rho_eos: Optional[list[float]] = None,
-        marbl_biogeochemistry: Optional[list[Path | str]] = None,
-        lateral_visc: Optional[float] = None,
-        gamma2: Optional[float] = None,
-        tracer_diff2: Optional[np.ndarray] = None,
-        vertical_mixing: Optional[tuple[float, np.ndarray]] = None,
-        my_bak_mixing: Optional[list[float]] = None,
-        sss_correction: Optional[float] = None,
-        sst_correction: Optional[float] = None,
-        ubind: Optional[float] = None,
-        v_sponge: Optional[float] = None,
-        grid: Optional[str | Path] = None,
-        climatology: Optional[str | Path] = None,
-    ):
-        """Initialize a ROMSInputSettings instance.
 
-        Parameters
-        ----------
-        title : str
-            Description of the ROMS run.
-        time_stepping : list[int]
-            List containing [ntimes, dt, ndtfast, ninfo].
-        bottom_drag : list[float]
-            List containing [rdrg, rdrg2, zob].
-        initial : tuple[int, str | Path | None]
-            A tuple (num. records, filename) for initial conditions.
-            Required, but filename can be None and num. records 0.
-        forcing : list[str | Path]
-            List of paths to forcing files. Required, but can be empty.
-        output_root_name : str
-            Base name for ROMS output files.
-        s_coord : list[float], optional
-            List containing vertical co-ordinate params [theta_s, theta_b, tcline].
-        rho0 : float, optional
-            Boussinesq reference density.
-        lin_rho_eos : list[float], optional
-            Linear equation of state coefficients [Tcoef, T0, Scoef, S0].
-        marbl_biogeochemistry : list[str | Path], optional
-            Paths to MARBL input files.
-        lateral_visc : float, optional
-            Horizontal viscosity parameter.
-        gamma2 : float, optional
-            Lateral boundary slipperiness parameter.
-        tracer_diff2 : np.ndarray, optional
-            Array of horizontal tracer diffusivities.
-        vertical_mixing : tuple[float, np.ndarray], optional
-            Tuple of background viscosity and (one per tracer) mixing coefficients.
-        my_bak_mixing : list[float], optional
-            List containing [Akq_bak, q2nu2, q2nu4]
-            for Mellor-Yamada 2.5 turbulent closure
-        sss_correction : float, optional
-            Surface salinity correction factor.
-        sst_correction : float, optional
-            Surface temperature correction factor.
-        ubind : float, optional
-            Open boundary binding velocity scale.
-        v_sponge : float, optional
-            Maximum viscosity in sponge layers.
-        grid : str or Path, optional
-            Path to grid file.
-        climatology : str or Path, optional
-            Path to climatology file.
-
-        See Also
-        --------
-        - ROMSRuntimeSettings:
-            Container for reading, manipulating, and writing ROMS
-            `.in` runtime configuration files.
-        """
-
-        self.title: str = title
-        self.time_stepping: OrderedDict = OrderedDict(
-            [
-                ("ntimes", time_stepping[0]),
-                ("dt", time_stepping[1]),
-                ("ndtfast", time_stepping[2]),
-                ("ninfo", time_stepping[3]),
-            ]
-        )
-
-        self.bottom_drag: OrderedDict = OrderedDict(
-            [
-                ("rdrg", bottom_drag[0]),
-                ("rdrg2", bottom_drag[1]),
-                ("zob", bottom_drag[2]),
-            ]
-        )
-
-        self.initial: OrderedDict = OrderedDict([("nrrec", initial[0])])
-        self.initial["ininame"] = Path(initial[1]) if initial[1] else ""
-
-        self.forcing = [Path(f) for f in forcing]
-        self.output_root_name = output_root_name
-
-        ################################################################################
-        # OPTIONAL
-
-        if marbl_biogeochemistry is not None:
-            self.marbl_biogeochemistry: OrderedDict | None = OrderedDict(
-                [
-                    ("marbl_namelist_fname", marbl_biogeochemistry[0]),
-                    ("marbl_tracer_list_fname", marbl_biogeochemistry[1]),
-                    ("marbl_diag_list_fname", marbl_biogeochemistry[2]),
-                ]
-            )
-        else:
-            self.marbl_biogeochemistry = None
-
-        if s_coord is not None:
-            self.s_coord: OrderedDict | None = OrderedDict(
-                [
-                    ("theta_s", s_coord[0]),
-                    ("theta_b", s_coord[1]),
-                    ("tcline", s_coord[2]),
-                ]
-            )
-        else:
-            self.s_coord = None
-
-        self.rho0 = rho0
-        if lin_rho_eos is not None:
-            self.lin_rho_eos: OrderedDict | None = OrderedDict(
-                [
-                    ("Tcoef", lin_rho_eos[0]),
-                    ("T0", lin_rho_eos[1]),
-                    ("Scoef", lin_rho_eos[2]),
-                    ("S0", lin_rho_eos[3]),
-                ]
-            )
-        else:
-            self.lin_rho_eos = None
-
-        self.lateral_visc = lateral_visc
-        self.gamma2 = gamma2
-        self.tracer_diff2 = tracer_diff2
-
-        if vertical_mixing is not None:
-            self.vertical_mixing: OrderedDict | None = OrderedDict(
-                [
-                    ("Akv_bak", vertical_mixing[0]),
-                    ("Akt_bak", vertical_mixing[1]),
-                ]
-            )
-        else:
-            self.vertical_mixing = None
-
-        if my_bak_mixing is not None:
-            self.my_bak_mixing: OrderedDict | None = OrderedDict(
-                [
-                    ("Akq_bak", my_bak_mixing[0]),
-                    ("q2nu2", my_bak_mixing[1]),
-                    ("q2nu4", my_bak_mixing[2]),
-                ]
-            )
-        else:
-            self.my_bak_mixing = None
-
-        self.sss_correction = sss_correction
-        self.sst_correction = sst_correction
-        self.ubind = ubind
-        self.v_sponge = v_sponge
-        self.grid = Path(grid) if grid is not None else None
-
-        self.climatology = climatology
+    # @model_serializer()
+    # def serialize(self) -> str:
+    #     return self
 
     @classmethod
     def from_file(cls, filepath: Path | str):
@@ -298,7 +359,7 @@ class ROMSRuntimeSettings:
                 return None
             section = sections[section_name][0].split()
             if expected_type == float:
-                section = [x.replace("D", "E") for x in section]
+                section = [x.upper().replace("D", "E") for x in section]
             section = [expected_type(x) for x in section]
 
             return section
@@ -365,15 +426,15 @@ class ROMSRuntimeSettings:
 
         return cls(
             title=title,
-            time_stepping=time_stepping,
-            marbl_biogeochemistry=marbl_biogeochemistry,
-            s_coord=s_coord,
+            time_stepping=TimeStepping(*time_stepping),
+            marbl_biogeochemistry=MarblBGC(*marbl_biogeochemistry),
+            s_coord=None if s_coord is None else SCoord(*s_coord),
             rho0=rho0,
-            lin_rho_eos=lin_rho_eos,
+            lin_rho_eos=None if lin_rho_eos is None else LinRhoEos(*lin_rho_eos),
             lateral_visc=lateral_visc,
             gamma2=gamma2,
             tracer_diff2=tracer_diff2,
-            bottom_drag=bottom_drag,
+            bottom_drag=BottomDrag(*bottom_drag),
             vertical_mixing=vertical_mixing,
             my_bak_mixing=my_bak_mixing,
             sss_correction=sss_correction,
@@ -381,11 +442,13 @@ class ROMSRuntimeSettings:
             ubind=ubind,
             v_sponge=v_sponge,
             grid=grid,
-            initial=initial,
-            forcing=forcing,
+            initial=None if initial is None else InitialBlock(*initial),
+            forcing=None if forcing is None else ForcingBlock(forcing),
             climatology=climatology,
             output_root_name=output_root_name,
         )
+
+
 
     def __str__(self) -> str:
         """Returns a string representation of the input settings.
@@ -403,39 +466,39 @@ class ROMSRuntimeSettings:
             f"Output filename prefix (`ROMSRuntimeSettings.output_root_name`): {self.output_root_name}"
         )
         lines.append("Time stepping (`ROMSRuntimeSettings.time_stepping`):")
-        lines.append(f"- Number of steps (`ntimes`) = {self.time_stepping['ntimes']},")
-        lines.append(f"- Time step (`dt`, sec) = {self.time_stepping['dt']},")
+        lines.append(f"- Number of steps (`ntimes`) = {self.time_stepping.ntimes},")
+        lines.append(f"- Time step (`dt`, sec) = {self.time_stepping.dt},")
         lines.append(
-            f"- Mode-splitting ratio (`ndtfast`) = {self.time_stepping['ndtfast']},"
+            f"- Mode-splitting ratio (`ndtfast`) = {self.time_stepping.ndtfast},"
         )
         lines.append(
-            f"- Runtime diagnostic frequency (`ninfo`, steps) = {self.time_stepping['ninfo']}"
+            f"- Runtime diagnostic frequency (`ninfo`, steps) = {self.time_stepping.ninfo}"
         )
         lines.append("Bottom drag (`ROMSRuntimeSettings.bottom_drag`):")
         lines.append(
-            f"- Linear bottom drag coefficient (`rdrg`, m/s) = {self.bottom_drag['rdrg']},"
+            f"- Linear bottom drag coefficient (`rdrg`, m/s) = {self.bottom_drag.rdrg},"
         )
         lines.append(
-            f"- Quadratic bottom drag coefficient (`rdrg2`, nondim) = {self.bottom_drag['rdrg2']}"
+            f"- Quadratic bottom drag coefficient (`rdrg2`, nondim) = {self.bottom_drag.rdrg2}"
         )
-        lines.append(f"- Bottom roughness height (`zob`,m) = {self.bottom_drag['zob']}")
+        lines.append(f"- Bottom roughness height (`zob`,m) = {self.bottom_drag.zob}")
         lines.append(
             f"Grid file (`ROMSRuntimeSettings.grid`): {self.grid if self.grid else 'Not set'}"
         )
         lines.append(
-            f"Initial conditions file (`ROMSRuntimeSettings.initial`): {self.initial.get('ininame', 'None')}"
+            f"Initial conditions file (`ROMSRuntimeSettings.initial`): {self.initial.ininame}"
         )
         lines.append(f"Forcing file(s): {_list_to_concise_str(self.forcing,pad=10)}")
         if self.s_coord is not None:
             lines.append("S-coordinate parameters (`ROMSRuntimeSettings.s_coord`):")
             lines.append(
-                f"Surface stretching parameter (`theta_s`) = {self.s_coord['theta_s']},"
+                f"Surface stretching parameter (`theta_s`) = {self.s_coord.theta_s},"
             )
             lines.append(
-                f"Bottom stretching parameter (`theta_b`) = {self.s_coord['theta_b']},"
+                f"Bottom stretching parameter (`theta_b`) = {self.s_coord.theta_b},"
             )
             lines.append(
-                f"Critical depth (`hc` or `tcline`, m) = {self.s_coord['tcline']}"
+                f"Critical depth (`hc` or `tcline`, m) = {self.s_coord.tcline}"
             )
         if self.rho0 is not None:
             lines.append(f"Boussinesq reference density (`rho0`, kg/m3) = {self.rho0}")
@@ -444,26 +507,26 @@ class ROMSRuntimeSettings:
                 "Linear equation of state parameters (`ROMSRuntimeSettings.lin_rho_eos`):"
             )
             lines.append(
-                f"- Thermal expansion coefficient, ⍺ (`Tcoef`, kg/m3/K) = {self.lin_rho_eos['Tcoef']},"
+                f"- Thermal expansion coefficient, ⍺ (`Tcoef`, kg/m3/K) = {self.lin_rho_eos.Tcoef},"
             )
             lines.append(
-                f"- Reference temperature (`T0`, °C) = {self.lin_rho_eos['T0']},"
+                f"- Reference temperature (`T0`, °C) = {self.lin_rho_eos.T0},"
             )
             lines.append(
-                f"- Haline contraction coefficient, β (`Scoef`, kg/m3/PSU) = {self.lin_rho_eos['Scoef']},"
+                f"- Haline contraction coefficient, β (`Scoef`, kg/m3/PSU) = {self.lin_rho_eos.Scoef},"
             )
-            lines.append(f"- Reference salinity (`S0`, psu) = {self.lin_rho_eos['S0']}")
+            lines.append(f"- Reference salinity (`S0`, psu) = {self.lin_rho_eos.S0}")
 
         if self.marbl_biogeochemistry is not None:
             lines.append("MARBL input (`ROMSRuntimeSettings.marbl_biogeochemistry`):")
             lines.append(
-                f"- MARBL runtime settings file: {self.marbl_biogeochemistry['marbl_namelist_fname']},"
+                f"- MARBL runtime settings file: {self.marbl_biogeochemistry.marbl_namelist_fname},"
             )
             lines.append(
-                f"- MARBL output tracer list: {self.marbl_biogeochemistry['marbl_tracer_list_fname']},"
+                f"- MARBL output tracer list: {self.marbl_biogeochemistry.marbl_tracer_list_fname},"
             )
             lines.append(
-                f"- MARBL output diagnostics list: {self.marbl_biogeochemistry['marbl_diag_list_fname']}"
+                f"- MARBL output diagnostics list: {self.marbl_biogeochemistry.marbl_diag_list_fname}"
             )
         if self.lateral_visc is not None:
             lines.append(
@@ -482,23 +545,23 @@ class ROMSRuntimeSettings:
                 "Vertical mixing parameters (`ROMSRuntimeSettings.vertical_mixing`):"
             )
             lines.append(
-                f"- Background vertical viscosity (`Akv_bak`, m2/s) = {self.vertical_mixing['Akv_bak']},"
+                f"- Background vertical viscosity (`Akv_bak`, m2/s) = {self.vertical_mixing.Akv_bak},"
             )
             lines.append(
-                f"- Background vertical mixing for tracers (`Akt_bak`, m2/s) = {self.vertical_mixing['Akt_bak']},"
+                f"- Background vertical mixing for tracers (`Akt_bak`, m2/s) = {self.vertical_mixing.Akt_bak},"
             )
         if self.my_bak_mixing is not None:
             lines.append(
                 "Mellor-Yamada Level 2.5 turbulent closure parameters (`ROMSRuntimeSettings.my_bak_mixing`):"
             )
             lines.append(
-                f"- Backround vertical TKE mixing [`Akq_bak`, m2/s] = {self.my_bak_mixing['Akq_bak']},"
+                f"- Backround vertical TKE mixing [`Akq_bak`, m2/s] = {self.my_bak_mixing.Akq_bak},"
             )
             lines.append(
-                f"- Horizontal Laplacian TKE mixing [`q2nu2`, m2/s] = {self.my_bak_mixing['q2nu2']},"
+                f"- Horizontal Laplacian TKE mixing [`q2nu2`, m2/s] = {self.my_bak_mixing.q2nu2},"
             )
             lines.append(
-                f"- Horizontal biharmonic TKE mixing [`q2nu4`, m4/s] = {self.my_bak_mixing['q2nu4']},"
+                f"- Horizontal biharmonic TKE mixing [`q2nu4`, m4/s] = {self.my_bak_mixing.q2nu4},"
             )
 
         if self.sss_correction is not None:
@@ -565,6 +628,11 @@ class ROMSRuntimeSettings:
         inner = ", ".join(f"{k}={repr(v)}" for k, v in attrs.items() if v is not None)
         return f"{self.__class__.__name__}({inner})"
 
+    # @model_serializer()
+    # def serialize(self) -> str:
+    #     string = ""
+    #     for f in self.
+
     def to_file(self, filepath: Path | str) -> None:
         """Write the current settings to a ROMS-compatible `.in` file.
 
@@ -576,128 +644,106 @@ class ROMSRuntimeSettings:
 
         filepath = Path(filepath)
 
-        def _format_value(val: float | str) -> str:
-            """Format a single value for .in file, using exponents for large or small
-            values."""
-
-            if isinstance(val, float):
-                if val == 0.0:
-                    return "0."
-                elif abs(val) < 1e-2 or abs(val) >= 1e4:
-                    return f"{val:.6E}".replace("E+00", "E0")
-            return str(val)
-
-        def _format_float_list(lst: list) -> str:
-            """Format a list of values for .in file."""
-
-            return " ".join(_format_value(x) for x in lst)
-
-        def write_section(name: str, data: dict | list | str, multi_line: bool = False):
-            """Write a section to file using ROMS input formatting conventions.
-
-            Parameters
-            ----------
-            name : str
-                Name of the ROMS input section.
-            data : dict, list, or str
-                Section content. Dicts print keys inline, lists print items.
-            multi_line : bool, default=False
-                Whether to write each value on its own line.
-            """
-
-            if multi_line:
-                value_joiner = "\n    "
-            else:
-                value_joiner = "    "
-
-            # OrderedDict with keys = write keys inline for readability
-            if isinstance(data, OrderedDict):
-                keys_line = " ".join(data.keys())
-                values = value_joiner.join(_format_value(v) for v in data.values())
-                f.write(f"{name}: {keys_line}\n")
-                f.write(f"    {values}\n")
-
-            # list of strings (multi-line section)
-            elif isinstance(data, list):
-                f.write(f"{name}:\n")
-                values = (
-                    "    " + value_joiner.join([_format_value(v) for v in data]) + "\n"
-                )
-                f.write(values)
-            # single line string
-            else:
-                f.write(f"{name}:\n")
-                f.write(f"    {data}\n")
-            # end with a newline
-            f.write("\n")
+        output_order = ["title",
+                        "time_stepping",
+                        "bottom_drag",
+                        "initial",
+                        "forcing",
+                        "output_root_name",
+                        "s_coord",
+                        "grid",
+                        "marbl_biogeochemistry",
+                        "lateral_visc",
+                        "rho0",
+                        "lin_rho_eos",
+                        "gamma2",
+                        "tracer_diff2",
+                        "vertical_mixing",
+                        "my_bak_mixing",
+                        "sss_correction",
+                        "sst_correction",
+                        "ubind",
+                        "v_sponge",
+                        "climatology"]
 
         with filepath.open("w") as f:
-            # Non-optional
-            write_section("title", self.title)
-            write_section("time_stepping", self.time_stepping)
-            write_section("bottom_drag", self.bottom_drag)
-            write_section("initial", self.initial, multi_line=True)
-            write_section("forcing", self.forcing, multi_line=True)
-            write_section("output_root_name", self.output_root_name)
 
-            if self.s_coord:
-                write_section("S-coord", self.s_coord)
+            for field in output_order:
+                if getattr(self, field) is None:
+                    continue
+                f.write(self.model_dump()[field])
 
-            if self.grid:
-                write_section("grid", str(self.grid))
+            #
+            # # Non-optional
+            # write_section("title", self.title)
+            # write_section("time_stepping", self.time_stepping)
+            # write_section("bottom_drag", self.bottom_drag)
+            # write_section("initial", self.initial, multi_line=True)
+            # write_section("forcing", self.forcing, multi_line=True)
+            # write_section("output_root_name", self.output_root_name)
+            #
+            # if self.s_coord:
+            #     write_section("S-coord", self.s_coord)
+            #
+            # if self.grid:
+            #     write_section("grid", str(self.grid))
+            #
+            # if self.marbl_biogeochemistry:
+            #     write_section(
+            #         "MARBL_biogeochemistry",
+            #         self.marbl_biogeochemistry,
+            #         multi_line=True,
+            #     )
+            #
+            # if self.lateral_visc is not None:
+            #     write_section("lateral_visc", _format_value(self.lateral_visc))
+            #
+            # if self.rho0 is not None:
+            #     write_section("rho0", _format_value(self.rho0))
+            #
+            # if self.lin_rho_eos:
+            #     write_section("lin_rho_eos", self.lin_rho_eos)
+            #
+            # if self.gamma2 is not None:
+            #     write_section("gamma2", _format_value(self.gamma2))
+            #
+            # if self.tracer_diff2 is not None:
+            #     write_section("tracer_diff2", _format_float_list(self.tracer_diff2))
+            #
+            # if self.vertical_mixing:
+            #     write_section(
+            #         "vertical_mixing",
+            #         OrderedDict(
+            #             {
+            #                 "Akv_bak": self.vertical_mixing[0],
+            #                 "Akt_bak": _format_float_list(
+            #                     self.vertical_mixing[1]
+            #                 ),
+            #             }
+            #         ),
+            #     )
+            #
+            # if self.my_bak_mixing is not None:
+            #     write_section("MY_bak_mixing", self.my_bak_mixing)
+            #
+            # if self.sss_correction is not None:
+            #     write_section("SSS_correction", _format_value(self.sss_correction))
+            #
+            # if self.sst_correction is not None:
+            #     write_section("SST_correction", _format_value(self.sst_correction))
+            #
+            # if self.ubind is not None:
+            #     write_section("ubind", _format_value(self.ubind))
+            #
+            # if self.v_sponge is not None:
+            #     write_section("v_sponge", _format_value(self.v_sponge))
+            #
+            # if self.climatology is not None:
+            #     write_section("climatology", str(self.climatology))
 
-            if self.marbl_biogeochemistry:
-                write_section(
-                    "MARBL_biogeochemistry",
-                    [
-                        str(self.marbl_biogeochemistry[k])
-                        for k in self.marbl_biogeochemistry
-                    ],
-                    multi_line=True,
-                )
-
-            if self.lateral_visc is not None:
-                write_section("lateral_visc", _format_value(self.lateral_visc))
-
-            if self.rho0 is not None:
-                write_section("rho0", _format_value(self.rho0))
-
-            if self.lin_rho_eos:
-                write_section("lin_rho_eos", self.lin_rho_eos)
-
-            if self.gamma2 is not None:
-                write_section("gamma2", _format_value(self.gamma2))
-
-            if self.tracer_diff2 is not None:
-                write_section("tracer_diff2", _format_float_list(self.tracer_diff2))
-
-            if self.vertical_mixing:
-                write_section(
-                    "vertical_mixing",
-                    OrderedDict(
-                        {
-                            "Akv_bak": self.vertical_mixing["Akv_bak"],
-                            "Akt_bak": _format_float_list(
-                                self.vertical_mixing["Akt_bak"]
-                            ),
-                        }
-                    ),
-                )
-
-            if self.my_bak_mixing is not None:
-                write_section("MY_bak_mixing", self.my_bak_mixing)
-
-            if self.sss_correction is not None:
-                write_section("SSS_correction", _format_value(self.sss_correction))
-
-            if self.sst_correction is not None:
-                write_section("SST_correction", _format_value(self.sst_correction))
-
-            if self.ubind is not None:
-                write_section("ubind", _format_value(self.ubind))
-
-            if self.v_sponge is not None:
-                write_section("v_sponge", _format_value(self.v_sponge))
-
-            if self.climatology is not None:
-                write_section("climatology", str(self.climatology))
+if __name__ == "__main__":
+    ff = "/Users/eilerman/Downloads/pacmed12km_Y2000.in"
+    ri = ROMSRuntimeSettings.from_file(filepath=ff)
+    # print(ri)
+    ri.model_dump(serialize_as_any=True)
+    ri.to_file("out.in")
