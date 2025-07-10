@@ -102,7 +102,7 @@ class SlurmQueue(Queue, ABC):
             mw_m, mw_s = map(int, mw_hms.split(":"))
         elif mw_hms.count(":") == 2:  # HH:MM:SS
             mw_h, mw_m, mw_s = map(int, mw_hms.split(":"))
-        return f"{mw_d*24 + mw_h:02}:{mw_m:02}:{mw_s:02}"
+        return f"{mw_d * 24 + mw_h:02}:{mw_m:02}:{mw_s:02}"
 
     @property
     @abstractmethod

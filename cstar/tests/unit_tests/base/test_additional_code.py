@@ -141,9 +141,9 @@ class TestStrAndRepr:
                  'test_file_2.py',
                  'test_file_3.opt']
         )""")
-        assert (
-            repr(remote_additional_code) == expected_repr
-        ), f"expected \n{repr(remote_additional_code)}\n, got \n{expected_repr}"
+        assert repr(remote_additional_code) == expected_repr, (
+            f"expected \n{repr(remote_additional_code)}\n, got \n{expected_repr}"
+        )
 
     def test_repr_local(self, local_additional_code):
         """Test that the __repr__ method returns the correct string for the example
@@ -197,9 +197,9 @@ class TestStrAndRepr:
             test_file_2.py
             test_file_3.opt""")
 
-        assert (
-            str(remote_additional_code) == expected_str
-        ), f"expected \n{str(remote_additional_code)}\n, got \n{expected_str}"
+        assert str(remote_additional_code) == expected_str, (
+            f"expected \n{str(remote_additional_code)}\n, got \n{expected_str}"
+        )
 
     def test_str_local(self, local_additional_code):
         """Test that the __str__ method returns the correct string for the example local
@@ -217,9 +217,9 @@ class TestStrAndRepr:
             test_file_2.py
             test_file_3.opt""")
 
-        assert (
-            str(local_additional_code) == expected_str
-        ), f"expected \n{str(local_additional_code)}\n, got \n{expected_str}"
+        assert str(local_additional_code) == expected_str, (
+            f"expected \n{str(local_additional_code)}\n, got \n{expected_str}"
+        )
 
 
 class TestExistsLocally:

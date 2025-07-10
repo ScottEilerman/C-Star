@@ -167,9 +167,9 @@ class AdditionalCode(LoggingMixin):
                         "AdditionalCode.source points to a repository but AdditionalCode.checkout_target is None"
                     )
                 else:
-                    assert isinstance(
-                        self.checkout_target, str
-                    ), "We have just verified checkout_target is not None"
+                    assert isinstance(self.checkout_target, str), (
+                        "We have just verified checkout_target is not None"
+                    )
                 tmp_dir = tempfile.mkdtemp()
                 _clone_and_checkout(
                     source_repo=self.source.location,

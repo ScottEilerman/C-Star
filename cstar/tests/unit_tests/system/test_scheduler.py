@@ -440,9 +440,7 @@ class TestStrAndRepr:
                 return_value="09:00:00",
             ),
         ):
-            expected = (
-                "SlurmQOS:\n" "--------\n" "name: main\n" "max_walltime: 09:00:00\n"
-            )
+            expected = "SlurmQOS:\n--------\nname: main\nmax_walltime: 09:00:00\n"
             assert str(queue) == expected
 
     def test_slurmqos_repr(self):
@@ -463,10 +461,7 @@ class TestStrAndRepr:
             ),
         ):
             expected = (
-                "SlurmPartition:\n"
-                "--------------\n"
-                "name: main\n"
-                "max_walltime: 09:00:00\n"
+                "SlurmPartition:\n--------------\nname: main\nmax_walltime: 09:00:00\n"
             )
             assert str(queue) == expected
 
@@ -479,7 +474,7 @@ class TestStrAndRepr:
     def test_pbsqueue_str(self):
         """Test __str__ for PBSQueue."""
         queue = PBSQueue(name="batch", max_walltime="72:00:00")
-        expected = "PBSQueue:\n" "--------\n" "name: batch\n" "max_walltime: 72:00:00\n"
+        expected = "PBSQueue:\n--------\nname: batch\nmax_walltime: 72:00:00\n"
         assert str(queue) == expected
 
     def test_pbsqueue_repr(self):

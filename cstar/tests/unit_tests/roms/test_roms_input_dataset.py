@@ -175,9 +175,9 @@ class TestStrAndRepr:
         )
 
         actual_str = str(local_roms_netcdf_dataset).strip()
-        assert (
-            expected_str in actual_str
-        ), f"Expected:\n{expected_str}\nBut got:\n{actual_str}"
+        assert expected_str in actual_str, (
+            f"Expected:\n{expected_str}\nBut got:\n{actual_str}"
+        )
 
     def test_repr_with_partitioned_files(self, local_roms_netcdf_dataset):
         """Test the ROMSInputDataset repr includes `partitioned_files`.
@@ -215,9 +215,9 @@ class TestStrAndRepr:
         expected_repr_normalized = " ".join(expected_repr.split())
         actual_repr_normalized = " ".join(actual_repr.split())
 
-        assert (
-            expected_repr_normalized in actual_repr_normalized
-        ), f"Expected:\n{expected_repr}\nBut got:\n{actual_repr}"
+        assert expected_repr_normalized in actual_repr_normalized, (
+            f"Expected:\n{expected_repr}\nBut got:\n{actual_repr}"
+        )
 
     def test_repr_with_partitioned_files_and_working_path(
         self, local_roms_netcdf_dataset
@@ -262,9 +262,9 @@ class TestStrAndRepr:
         expected_repr_normalized = " ".join(expected_repr.split())
         actual_repr_normalized = " ".join(actual_repr.split())
 
-        assert (
-            expected_repr_normalized in actual_repr_normalized
-        ), f"Expected:\n{expected_repr_normalized}\n to be in \n{actual_repr_normalized}"
+        assert expected_repr_normalized in actual_repr_normalized, (
+            f"Expected:\n{expected_repr_normalized}\n to be in \n{actual_repr_normalized}"
+        )
 
 
 class TestROMSInputDatasetGet:
@@ -453,9 +453,9 @@ class TestROMSInputDatasetGet:
         )
 
         # Ensure stat was called for the saved file
-        assert (
-            mock_stat.call_count == 1
-        ), f"Expected stat to be called 1 time, but got {mock_stat.call_count} calls."
+        assert mock_stat.call_count == 1, (
+            f"Expected stat to be called 1 time, but got {mock_stat.call_count} calls."
+        )
 
     @mock.patch("pathlib.Path.stat", autospec=True)
     @mock.patch("cstar.roms.input_dataset._get_sha256_hash", return_value="mocked_hash")
@@ -553,9 +553,9 @@ class TestROMSInputDatasetGet:
         )
 
         # Ensure stat was called for the saved file
-        assert (
-            mock_stat.call_count == 1
-        ), f"Expected stat to be called 1 time, but got {mock_stat.call_count} calls."
+        assert mock_stat.call_count == 1, (
+            f"Expected stat to be called 1 time, but got {mock_stat.call_count} calls."
+        )
 
     def test_get_from_yaml_raises_if_not_yaml(self, local_roms_netcdf_dataset):
         """Tests that the `ROMSInputDataset._get_from_yaml` method raises if called from
@@ -800,9 +800,9 @@ class TestROMSInputDatasetGet:
             )
 
             # Ensure no further processing happened
-            assert (
-                not self.mock_yaml_load.called
-            ), "Expected no calls to yaml.safe_load, but some occurred."
+            assert not self.mock_yaml_load.called, (
+                "Expected no calls to yaml.safe_load, but some occurred."
+            )
 
     @mock.patch(
         "cstar.roms.input_dataset.ROMSInputDataset._get_from_partitioned_source",
@@ -1043,9 +1043,9 @@ class TestROMSInputDatasetPartition:
                 )
 
                 # Ensure stat was called for each saved file
-                assert (
-                    mock_stat.call_count == 6
-                ), f"Expected stat to be called 6 times, but got {mock_stat.call_count} calls."
+                assert mock_stat.call_count == 6, (
+                    f"Expected stat to be called 6 times, but got {mock_stat.call_count} calls."
+                )
 
     @mock.patch("cstar.roms.input_dataset._get_sha256_hash", return_value="mocked_hash")
     @mock.patch("pathlib.Path.stat", autospec=True)
@@ -1125,9 +1125,9 @@ class TestROMSInputDatasetPartition:
                 )
 
                 # Ensure stat was called for each saved file
-                assert (
-                    mock_stat.call_count == 8
-                ), f"Expected stat to be called 8 times, but got {mock_stat.call_count} calls."
+                assert mock_stat.call_count == 8, (
+                    f"Expected stat to be called 8 times, but got {mock_stat.call_count} calls."
+                )
 
     @mock.patch("cstar.roms.input_dataset.roms_tools.partition_netcdf")
     def test_partition_skips_if_already_partitioned(

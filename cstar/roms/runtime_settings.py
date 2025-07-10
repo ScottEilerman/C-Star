@@ -656,7 +656,7 @@ class ROMSRuntimeSettings(BaseModel):
             f"Initial conditions file (`ROMSRuntimeSettings.initial`): {self.initial.ininame}"
         )
         lines.append(
-            f"Forcing file(s): {_list_to_concise_str(self.forcing.filenames,pad=10)}"
+            f"Forcing file(s): {_list_to_concise_str(self.forcing.filenames, pad=10)}"
         )
         if self.s_coord is not None:
             lines.append("S-coordinate parameters (`ROMSRuntimeSettings.s_coord`):")

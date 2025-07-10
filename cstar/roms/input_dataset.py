@@ -49,7 +49,7 @@ class ROMSPartitioning:
         self._local_file_stat_cache: Dict = {}
 
     def __repr__(self) -> str:
-        return f"{self.__class__.__name__}(np_xi={self.np_xi}, np_eta={self.np_eta}, files={_list_to_concise_str(self.files,pad=43)})"
+        return f"{self.__class__.__name__}(np_xi={self.np_xi}, np_eta={self.np_eta}, files={_list_to_concise_str(self.files, pad=43)})"
 
     def __len__(self):
         return len(self.files)
@@ -407,7 +407,7 @@ class ROMSInputDataset(InputDataset, ABC):
         )
         save_kwargs: dict[Any, Any] = {}
         save_kwargs["filepath"] = Path(
-            f"{local_dir/Path(self.source.location).stem}.nc"
+            f"{local_dir / Path(self.source.location).stem}.nc"
         )
 
         savepath = roms_tools_class_instance.save(**save_kwargs)

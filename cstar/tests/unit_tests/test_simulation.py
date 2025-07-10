@@ -706,14 +706,14 @@ class TestSimulationPersistence:
         restored_sim = MockSimulation.restore(sim.directory)
 
         # Ensure the restored object has the same attributes
-        assert (
-            restored_sim.to_dict() == sim.to_dict()
-        ), "Restored simulation does not match the original"
+        assert restored_sim.to_dict() == sim.to_dict(), (
+            "Restored simulation does not match the original"
+        )
 
         # Also compare serialized versions
-        assert pickle.dumps(restored_sim) == pickle.dumps(
-            sim
-        ), "Serialized data mismatch after restore"
+        assert pickle.dumps(restored_sim) == pickle.dumps(sim), (
+            "Serialized data mismatch after restore"
+        )
 
     def test_restore_missing_file(self, tmp_path):
         """Test that `restore()` raises an error when the state file is missing.
@@ -804,9 +804,9 @@ class TestSimulationRestart:
         sim, _ = example_simulation
         new_sim = sim.restart(new_end_date="2026-06-30")
 
-        assert isinstance(
-            new_sim, MockSimulation
-        ), "Restart did not return a new MockSimulation instance"
+        assert isinstance(new_sim, MockSimulation), (
+            "Restart did not return a new MockSimulation instance"
+        )
         assert new_sim is not sim, "Restarted simulation should be a new object"
 
     def test_restart_updates_start_and_end_dates(self, example_simulation):
@@ -829,12 +829,12 @@ class TestSimulationRestart:
         sim, _ = example_simulation
         new_end_date = datetime(2026, 6, 30)
         new_sim = sim.restart(new_end_date=new_end_date)
-        assert (
-            new_sim.start_date == sim.end_date
-        ), "Restarted simulation start_date is incorrect"
-        assert (
-            new_sim.end_date == new_end_date
-        ), "Restarted simulation end_date does not match input"
+        assert new_sim.start_date == sim.end_date, (
+            "Restarted simulation start_date is incorrect"
+        )
+        assert new_sim.end_date == new_end_date, (
+            "Restarted simulation end_date does not match input"
+        )
 
     def test_restart_preserves_other_attributes(self, example_simulation):
         """Test that `restart()` maintains all attributes except dates and directory.
@@ -882,9 +882,9 @@ class TestSimulationRestart:
         new_sim = sim.restart(new_end_date="2026-06-30")
 
         expected_dir_suffix = f"RESTART_{sim.end_date.strftime('%Y%m%d_%H%M%S')}"
-        assert expected_dir_suffix in str(
-            new_sim.directory
-        ), "Restart directory does not include correct timestamp"
+        assert expected_dir_suffix in str(new_sim.directory), (
+            "Restart directory does not include correct timestamp"
+        )
 
     def test_restart_raises_error_on_invalid_new_end_date(self, example_simulation):
         """Test that `restart()` raises an error for an invalid `new_end_date`.
@@ -927,9 +927,9 @@ class TestSimulationRestart:
         sim, _ = example_simulation
         new_sim = sim.restart(new_end_date="2026-06-30")
 
-        assert new_sim.end_date == datetime(
-            2026, 6, 30
-        ), "Restarted simulation did not correctly parse string end_date"
+        assert new_sim.end_date == datetime(2026, 6, 30), (
+            "Restarted simulation did not correctly parse string end_date"
+        )
 
 
 def test_to_dict(example_simulation):

@@ -114,9 +114,9 @@ class TestPBSJob:
         )
 
         # Validate the script content
-        assert (
-            job.script.strip() == expected_script.strip()
-        ), f"Script mismatch!\nExpected:\n{expected_script}\n\nGot:\n{job.script}"
+        assert job.script.strip() == expected_script.strip(), (
+            f"Script mismatch!\nExpected:\n{expected_script}\n\nGot:\n{job.script}"
+        )
 
     @patch("subprocess.run")
     def test_submit(self, mock_subprocess, tmp_path):
@@ -514,9 +514,9 @@ class TestPBSJob:
             with pytest.raises(expected_exception, match=expected_message):
                 job.status
         else:
-            assert (
-                job.status == expected_status
-            ), f"Expected status '{expected_status}' but got '{job.status}'"
+            assert job.status == expected_status, (
+                f"Expected status '{expected_status}' but got '{job.status}'"
+            )
 
     @patch("json.loads", side_effect=json.JSONDecodeError("Expecting value", "", 0))
     @patch("subprocess.run")

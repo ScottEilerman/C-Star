@@ -127,9 +127,9 @@ class TestSlurmJob:
             "\necho Hello, World"
         )
 
-        assert (
-            job.script.strip() == expected_script.strip()
-        ), f"Expected:\n{expected_script}\n\nGot:\n{job.script}"
+        assert job.script.strip() == expected_script.strip(), (
+            f"Expected:\n{expected_script}\n\nGot:\n{job.script}"
+        )
 
     @pytest.mark.filterwarnings(
         r"ignore:.* Attempting to create scheduler job.*:UserWarning"
@@ -189,9 +189,9 @@ class TestSlurmJob:
             "\necho Hello, World"
         )
 
-        assert (
-            job.script.strip() == expected_script.strip()
-        ), f"Expected:\n{expected_script}\n\nGot:\n{job.script}"
+        assert job.script.strip() == expected_script.strip(), (
+            f"Expected:\n{expected_script}\n\nGot:\n{job.script}"
+        )
 
     @patch(
         "cstar.system.manager.CStarSystemManager.environment", new_callable=PropertyMock
@@ -253,9 +253,9 @@ class TestSlurmJob:
         assert script_path.exists()
         with script_path.open() as f:
             script_content = f.read()
-        assert (
-            script_content.strip() == job.script.strip()
-        ), f"Script content mismatch!\nExpected:\n{job.script}\nGot:\n{script_content}"
+        assert script_content.strip() == job.script.strip(), (
+            f"Script content mismatch!\nExpected:\n{job.script}\nGot:\n{script_content}"
+        )
 
         # Hardcoded expected environment (excluding SLURM_ variables)
         expected_env = {"SOME_ENV_VAR": "value"}
@@ -455,9 +455,9 @@ class TestSlurmJob:
         with script_path.open() as f:
             file_content = f.read()
 
-        assert (
-            file_content.strip() == job.script.strip()
-        ), f"Script content mismatch!\nExpected:\n{job.script}\nGot:\n{file_content}"
+        assert file_content.strip() == job.script.strip(), (
+            f"Script content mismatch!\nExpected:\n{job.script}\nGot:\n{file_content}"
+        )
 
     @patch("subprocess.run")
     @pytest.mark.parametrize(
@@ -536,6 +536,6 @@ class TestSlurmJob:
             ):
                 job.status
         else:
-            assert (
-                job.status == expected_status
-            ), f"Expected status '{expected_status}' but got '{job.status}'"
+            assert job.status == expected_status, (
+                f"Expected status '{expected_status}' but got '{job.status}'"
+            )
