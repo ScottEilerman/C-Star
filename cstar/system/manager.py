@@ -19,7 +19,8 @@ from cstar.system.scheduler import (
 @dataclass(frozen=True)
 class HostNameEvaluator:
     """Container of host-specific names used to determine the system name that will be
-    used by C-Star."""
+    used by C-Star.
+    """
 
     lmod_syshost: str = field(default="", init=False)
     """The lmod-specific hostname."""
@@ -42,7 +43,6 @@ class HostNameEvaluator:
 
         NOTE: make use of setattr because attributes are read-only.
         """
-        # ruff: noqa: B010
         setattr_ = object.__setattr__
         setattr_(self, "lmod_syshost", os.environ.get(self.ENV_LMOD_SYSHOST, ""))
         setattr_(self, "lmod_sysname", os.environ.get(self.ENV_LMOD_SYSNAME, ""))
@@ -87,7 +87,7 @@ class HostNameEvaluator:
         if self.platform_hostname:
             return self.platform_hostname
 
-        raise EnvironmentError(
+        raise OSError(
             f"C-Star cannot determine your system name. Diagnostics: {self._diagnostic}"
         )
 
@@ -280,7 +280,6 @@ class CStarSystemManager:
         Initialize the system manager by determining the system name and initializing
         the environment and scheduler based on that name.
         """
-
         self._context = _get_system_context()
         """A context object configured for the current system."""
         self._environment = CStarEnvironment(

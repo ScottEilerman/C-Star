@@ -104,7 +104,7 @@ if [[ ${#TASKS[@]} -gt 0 ]]; then
   for TASK in "${TASKS[@]}"; do
     # Remove the `- [ ]` or `- [x]` prefix from each TASK
     CLEANED_TASK=$(echo "$TASK" | sed 's/^- \[[ x]\] //')
-    
+
     # Check for presence of colon and split based on that
     if [[ "$CLEANED_TASK" == *:* ]]; then
       # Split into summary and description based on the first colon
@@ -120,18 +120,18 @@ if [[ ${#TASKS[@]} -gt 0 ]]; then
     ## Trim any extra whitespace or newlines in summary and description
     TASK_SUMMARY=$(echo "$TASK_SUMMARY" | tr -d '\n' | tr -d '\r' | xargs)
     TASK_DESCRIPTION=$(echo "$TASK_DESCRIPTION" | tr -d '\n' | tr -d '\r' | xargs)
-    
+
     ## Escape double quotes in the summary and description
     ESCAPED_TASK_SUMMARY="${TASK_SUMMARY//\"/\\\"}"
     ESCAPED_TASK_DESCRIPTION="${TASK_DESCRIPTION//\"/\\\"}"
     ESCAPED_TASK_SUMMARY="${ESCAPED_TASK_SUMMARY//$'\n'/ }"
     ESCAPED_TASK_DESCRIPTION="${ESCAPED_TASK_DESCRIPTION//$'\n'/ }"
-    
+
     # Create JSON payload for each subtask with summary and description
     # issuetype id 10009 corresponds to subtask
 
 
-    if [[ -n "$JIRA_ASSIGNEE_ID" ]]; then	
+    if [[ -n "$JIRA_ASSIGNEE_ID" ]]; then
 	cat > subtask.json <<EOF
 {
   "fields": {
@@ -156,7 +156,7 @@ EOF
   }
 }
 EOF
-    fi	
+    fi
     echo "Generated JSON payload for subtask:"
     cat subtask.json
 

@@ -46,7 +46,7 @@ def test_modify_template_blueprint(modify_template_blueprint, tmpdir):
     assert isinstance(test_blueprint, LocalPath), (
         f"Expected type LocalPath, but got {type(test_blueprint)}"
     )
-    with open(test_blueprint, "r") as bpfile:
+    with open(test_blueprint) as bpfile:
         bpyaml = yaml.safe_load(bpfile)
 
     assert (
@@ -57,7 +57,8 @@ def test_modify_template_blueprint(modify_template_blueprint, tmpdir):
 
 class TestFetchData:
     """Test class for testing data-fetching fixtures defined in the roms/fixtures.py
-    file."""
+    file.
+    """
 
     def test_fetch_roms_tools_source_data(
         self, request, tmpdir, fetch_roms_tools_source_data
@@ -84,7 +85,6 @@ class TestFetchData:
         - The symlink exists and is valid
         - All expected data files are present in the symlinked directory
         """
-
         test_data_directory = Path(tmpdir / "test_data_directory")
         fetch_roms_tools_source_data(test_data_directory)
 

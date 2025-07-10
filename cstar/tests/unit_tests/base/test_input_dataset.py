@@ -79,7 +79,6 @@ def remote_input_dataset():
     ------
     MockInputDataset: Instance representing a remote input dataset for testing.
     """
-
     # Using context managers to patch properties on DataSource
     with (
         mock.patch.object(
@@ -135,7 +134,6 @@ class TestInputDatasetInit:
         - The `basename` is "local_file.nc".
         - The dataset is an instance of MockInputDataset.
         """
-
         assert local_input_dataset.source.location_type == "path", (
             "Expected location_type to be 'path'"
         )

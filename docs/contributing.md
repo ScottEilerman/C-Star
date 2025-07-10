@@ -9,7 +9,7 @@ Install **one** of the following conda environments, depending on whether you ar
 
 ```
 conda env create -f ci/environment_hpc.yml  # conda environment for supported HPC system
-# conda env create -f ci/environment.yml  # conda environment for generic machine 
+# conda env create -f ci/environment.yml  # conda environment for generic machine
 ```
 
 Activate the conda environment:
@@ -20,7 +20,7 @@ conda activate cstar_env
 Install `C-Star` in the same environment:
 ```
 pip install -e .
-``` 
+```
 
 This conda environment is useful for any of the following steps:
 
@@ -38,7 +38,7 @@ pytest
 ```
 
 ## Contributing code
-If you have written new code, you can run the tests as described in the previous step. You will likely have to iterate here several times until all tests pass. The next step is to make sure that the code is formatted properly. 
+If you have written new code, you can run the tests as described in the previous step. You will likely have to iterate here several times until all tests pass. The next step is to make sure that the code is formatted properly.
 Activate the environment (created above) and run all linters as follows:
 
 ```

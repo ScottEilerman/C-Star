@@ -12,7 +12,7 @@ New features:
 Breaking Changes:
 ~~~~~~~~~~~~~~~~~
 - Merge Case and Component classes into a single class, Simulation, simplifying internal/blueprint structure. Remove old Case and Component modules.
-- Rename `caseroot` to `directory` 
+- Rename `caseroot` to `directory`
 - Rename BaseModel to ExternalCodeBase
 - Remove `start_time` and `end_time` parameters from `InputDataset.get()`, these are now obtained from the corresponding attributes
 - Rename `ROMSComponent.namelists` to `ROMSSimulation.runtime_code` and `ROMSComponent.additional_source_code` to `ROMSSimulation.compile_time_code`
@@ -37,7 +37,7 @@ Bugfixes:
 - Add `expanduser` to `Path` instances to allow tildes to represent root in paths
 - Correct issue where `AdditionalCode.modified_files` list indices did not correspond to `AdditionalCode.files`
 
-  
+
 =============
 .. _v0.0.8-alpha:
 
@@ -55,7 +55,7 @@ New features:
 Bugfixes:
 ~~~~~~~~~
 - git and DataSource information are now read-only attributes throughout
-  
+
 
 .. _v0.0.3-alpha:
 
@@ -77,9 +77,9 @@ v0.0.1-alpha (6th Dec 2024)
 
 The first release of C-Star!
 
-This release provides basic functionality, including the ability to create, import, and export a ":term:`blueprint`" for reproducible ocean model simulations (a C-Star ":term:`Case`") using supported ocean models (ROMS, optionally with MARBL biogeochemistry) and run those Cases locally or on supported HPC systems (via Slurm and PBS). 
+This release provides basic functionality, including the ability to create, import, and export a ":term:`blueprint`" for reproducible ocean model simulations (a C-Star ":term:`Case`") using supported ocean models (ROMS, optionally with MARBL biogeochemistry) and run those Cases locally or on supported HPC systems (via Slurm and PBS).
 There is support for using existing model input data in netCDF format, or creating new input data via integration with the roms-tools library.
 
-Note that the python API is not yet stable, and some aspects of the schema for the blueprint will likely evolve. 
-Therefore whilst you are welcome to try out using the package, we cannot yet guarantee backwards compatibility. 
+Note that the python API is not yet stable, and some aspects of the schema for the blueprint will likely evolve.
+Therefore whilst you are welcome to try out using the package, we cannot yet guarantee backwards compatibility.
 We expect to reach a more stable version in Q1 2025.

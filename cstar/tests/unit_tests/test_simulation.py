@@ -222,7 +222,6 @@ class TestSimulationInitialization:
         ----------
         - The returned value matches the expected `datetime` object or `None`.
         """
-
         sim, _ = example_simulation
         assert sim._parse_date(date=input_date, field_name="test_field") == expected
 
@@ -241,7 +240,6 @@ class TestSimulationInitialization:
         ----------
         - The returned value matches the explicitly provided date.
         """
-
         sim, _ = example_simulation
         assert sim._get_date_or_fallback(
             date="2025-01-01", fallback=datetime(2024, 1, 1), field_name="start_date"
@@ -265,7 +263,6 @@ class TestSimulationInitialization:
         - A warning is logged indicating that the fallback value is being used.
         - The returned value matches the fallback date.
         """
-
         sim, _ = example_simulation
         caplog.set_level(logging.DEBUG, logger=sim.log.name)
 
@@ -288,7 +285,6 @@ class TestSimulationInitialization:
         ----------
         - A `ValueError` is raised with the expected error message.
         """
-
         sim, _ = example_simulation
         with pytest.raises(
             ValueError, match="Neither start_date nor a valid fallback was provided."
@@ -305,7 +301,6 @@ class TestSimulationInitialization:
         ----------------
         - `example_simulation`: Provides a mock `Simulation` instance.
         """
-
         sim, _ = example_simulation
         sim._validate_date_range()  # Should not raise any error
 
@@ -323,7 +318,6 @@ class TestSimulationInitialization:
         ----------
         - A `ValueError` is raised with a message indicating `start_date` is too early.
         """
-
         with pytest.raises(
             ValueError, match="start_date .* is before the earliest valid start date"
         ):
@@ -352,7 +346,6 @@ class TestSimulationInitialization:
         ----------
         - A `ValueError` is raised with a message indicating `end_date` is too late.
         """
-
         with pytest.raises(
             ValueError, match="end_date .* is after the latest valid end date"
         ):
@@ -411,7 +404,6 @@ class TestSimulationInitialization:
         ----------
         - The returned directory path is correctly resolved.
         """
-
         sim, _ = example_simulation
         new_dir = tmp_path / "new_simulation"
 
@@ -465,7 +457,6 @@ class TestSimulationInitialization:
         - `_validate_date_range()` is called once.
         - The `Simulation` instance has correctly set attributes.
         """
-
         with (
             patch.object(
                 MockSimulation, "_validate_simulation_directory"
@@ -513,7 +504,6 @@ class TestSimulationInitialization:
         - The `Simulation` instance's `end_date` is set to `valid_end_date`.
         - A warning is logged indicating that default values are being used.
         """
-
         sim = MockSimulation(
             name="FallbackSim",
             directory=tmp_path,
@@ -547,7 +537,6 @@ class TestSimulationInitialization:
         ----------
           - A warning is logged indicating that date range validation is not possible.
         """
-
         sim = MockSimulation(
             name="FallbackSim",
             codebase=MockExternalCodeBase(),
@@ -631,7 +620,6 @@ Executable path: {sim_dir}"""
         ----------
         - The generated string matches the expected format for `repr()`.
         """
-
         sim, sim_dir = example_simulation
         expected_repr = f"""\
 MockSimulation(
@@ -700,7 +688,6 @@ class TestSimulationPersistence:
         - The restored instance matches the original instance when converted to a dictionary.
         - The serialized version of the restored instance matches the original.
         """
-
         sim, _ = example_simulation
         sim.persist()
         restored_sim = MockSimulation.restore(sim.directory)
@@ -750,7 +737,6 @@ class TestSimulationPersistence:
         - A `RuntimeError` is raised with a message indicating that persistence
           is not allowed while a local process is running.
         """
-
         sim, _ = example_simulation
         mock_handler = MagicMock(spec=LocalProcess)
         mock_handler.status = ExecutionStatus.RUNNING
@@ -800,7 +786,6 @@ class TestSimulationRestart:
         - The restarted simulation is an instance of `MockSimulation`.
         - The restarted simulation is a new object and not the same as the original instance.
         """
-
         sim, _ = example_simulation
         new_sim = sim.restart(new_end_date="2026-06-30")
 
@@ -825,7 +810,6 @@ class TestSimulationRestart:
         - The restarted simulation's `start_date` matches the original simulation's `end_date`.
         - The restarted simulation's `end_date` matches the provided `new_end_date`.
         """
-
         sim, _ = example_simulation
         new_end_date = datetime(2026, 6, 30)
         new_sim = sim.restart(new_end_date=new_end_date)
@@ -852,7 +836,6 @@ class TestSimulationRestart:
         - The `discretization` settings remain identical.
         - `valid_start_date` and `valid_end_date` remain the same.
         """
-
         sim, _ = example_simulation
         new_sim = sim.restart(new_end_date="2026-06-30")
 
@@ -877,7 +860,6 @@ class TestSimulationRestart:
         - The restarted simulation's directory name includes the expected timestamp
           derived from the original simulation's `end_date`.
         """
-
         sim, _ = example_simulation
         new_sim = sim.restart(new_end_date="2026-06-30")
 
@@ -901,7 +883,6 @@ class TestSimulationRestart:
         - A `ValueError` is raised with a message indicating that `new_end_date`
           must be a `str` or `datetime`.
         """
-
         sim, _ = example_simulation
         with pytest.raises(
             ValueError, match="Expected str or datetime for `new_end_date`"
@@ -923,7 +904,6 @@ class TestSimulationRestart:
         - The restarted simulation's `end_date` is correctly parsed as a `datetime` object.
         - The parsed `end_date` matches the expected `datetime` value.
         """
-
         sim, _ = example_simulation
         new_sim = sim.restart(new_end_date="2026-06-30")
 
@@ -946,7 +926,6 @@ def test_to_dict(example_simulation):
     ----------
     - The values in the dictionary correctly match the `Simulation` instance's attributes.
     """
-
     sim, directory = example_simulation
     test_dict = sim.to_dict()
 

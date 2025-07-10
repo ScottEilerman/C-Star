@@ -12,10 +12,10 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 
+import logging
 import os
 import pathlib
 import sys
-import logging
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -28,8 +28,6 @@ os.environ["PYTHONPATH"] = str(root)
 os.environ["CONDA_PREFIX"] = str(root)
 sys.path.insert(0, str(root))
 
-import cstar  # isort:skip
-
 
 project = "C-Star"
 copyright = "2024, [C]Worthy"
@@ -41,7 +39,7 @@ rst_prolog = """.. attention::
     **This project is still in an early phase of development.**
 
     The `python API <https://c-star.readthedocs.io/en/latest/api.html>`_ is not yet stable, and some aspects of the schema for the `blueprint <https://c-star.readthedocs.io/en/latest/terminology.html#term-blueprint>`_ will likely evolve.
-    Therefore whilst you are welcome to try out using the package, we cannot yet guarantee backwards compatibility. 
+    Therefore whilst you are welcome to try out using the package, we cannot yet guarantee backwards compatibility.
     We expect to reach a more stable version in Q1 2025.
 """
 

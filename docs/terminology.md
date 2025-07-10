@@ -10,7 +10,7 @@ Simulation
   The primary object of `C-Star`. It contains all the necessary information for a user to run a reproducible Earth system simulation. Specific subclasses are applied to different simulation systems. Currently C-Star exclusively supports UCLA-ROMS via the ROMSSimulation subclass.
 
 blueprint
-  An on-disk representation of a {term}`Somulation <Simulation>`, stored in a `yaml` file. A `Simulation` can be exported to, or created from, a blueprint file. 
+  An on-disk representation of a {term}`Somulation <Simulation>`, stored in a `yaml` file. A `Simulation` can be exported to, or created from, a blueprint file.
 
 External Codebase
   An object that describes a non-python dependency such as the source code of an Earth system model. It does not contain any information relative to a specific instance of this codebase, such as a specific model simulation. Typically it will simply point (via the `source_repo` attribute) to the repository in which a development team hosts the codebase, and accepts a `checkout_target` parameter instructing C-Star on which version of the code to use.
@@ -24,9 +24,3 @@ Input Dataset
 Discretization
   An object that contains any information related to the discretization of a {term}`simulation <Simulation>`, such as time step and CPU distribution.
 ```
-
-
-
-
-
-

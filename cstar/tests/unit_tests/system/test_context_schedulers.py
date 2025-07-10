@@ -30,12 +30,13 @@ def test_context_registry(
     exp_queue_names: set[str] | None,
 ) -> None:
     """Verify that the type of scheduler created by each of the known system contexts
-    matches expectations."""
+    matches expectations.
+    """
     scheduler = wrapped_class.create_scheduler()
 
     if exp_sched_type is not None:
         assert type(scheduler) is exp_sched_type
-        queues = getattr(scheduler, "queues")  # noqa: B009
+        queues = getattr(scheduler, "queues")
         assert {q.name for q in queues} == exp_queue_names
     else:
         assert scheduler is None

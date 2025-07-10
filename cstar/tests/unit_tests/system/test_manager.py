@@ -23,9 +23,6 @@ def mock_environment_vars() -> Generator[None, None, None]:
     """Fixture to mock environment variables.
 
     Configures the environment to simulate execution on Perlmutter.
-
-    Returns
-    -------
     """
     with patch.dict(
         os.environ,

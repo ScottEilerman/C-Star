@@ -189,7 +189,8 @@ class TestScheduler:
 
     def test_scheduler_get_queue(self):
         """Ensure that queues can be retrieved by name, and missing queues raise a
-        ValueError."""
+        ValueError.
+        """
         queue1 = MockQueue(name="general")
         queue2 = MockQueue(name="batch")
         scheduler = SlurmScheduler(
@@ -344,7 +345,6 @@ class TestScheduler:
         -------
         - An appropriate error message is logged
         """
-
         caplog.set_level(logging.DEBUG, logger="cstar.base.utils.log")
 
         mock_subprocess_run.return_value = MagicMock(
@@ -377,7 +377,6 @@ class TestScheduler:
         -------
         - An appropriate error message is logged
         """
-
         caplog.set_level(logging.DEBUG, logger="cstar.base.utils.log")
 
         mock_subprocess_run.return_value = MagicMock(
@@ -427,7 +426,8 @@ class TestScheduler:
 
 class TestStrAndRepr:
     """Unit tests for the __str__ and __repr__ methods of Queue, Scheduler, and their
-    respective subclasses."""
+    respective subclasses.
+    """
 
     def test_slurmqos_str(self):
         """Test __str__ for SlurmQueue."""

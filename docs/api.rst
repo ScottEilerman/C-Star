@@ -6,7 +6,7 @@ Simulation
 
 .. autosummary::
    :toctree: generated/
-	     
+
    cstar.Simulation
    cstar.roms.ROMSSimulation
 
@@ -64,7 +64,7 @@ Scheduler Job
    cstar.execution.scheduler_job.SchedulerJob
    cstar.execution.scheduler_job.SlurmJob
    cstar.execution.scheduler_job.PBSJob
-   
+
 System
 ------
 .. autosummary::
@@ -73,4 +73,3 @@ System
    cstar.system.manager.CStarSystemManager
    cstar.system.scheduler.Scheduler
    cstar.system.environment.CStarEnvironment
-
