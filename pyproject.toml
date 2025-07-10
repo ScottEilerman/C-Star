@@ -38,7 +38,7 @@ test = [
      "pytest>=7.0",
      "roms_tools[dask]==2.6.2"
      ]
-dev =[]
+dev =["ruff"]
 
 [build-system]
 requires = [
@@ -59,9 +59,16 @@ exclude = "properties|asv_bench|docs"
 # Configuration for ruff linter and formatter
 [tool.ruff]
 fix = true
+show-fixes = true
+line-length = 88
 
 [tool.ruff.lint]
-extend-select = ["I"]
+extend-select = ["I"] #, "E", "W", "F", "D", "RUF", "UP"]
+#ignore = ["E501", "D205", "D102", "D100", "D401", "D101", "D105", "D103", "D104"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"
+
 
 [tool.pre-commit]
 config = ".pre-commit-config.yaml"
