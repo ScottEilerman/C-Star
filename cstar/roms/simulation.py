@@ -44,71 +44,6 @@ class ROMSSimulation(Simulation):
     model grids, forcing files, and discretization parameters. It also facilitates the setup,
     execution, and post-processing of ROMS simulations.
 
-    Attributes
-    ----------
-    name : str
-        The name of this simulation.
-    directory : Path
-        The local directory in which this simulation will be prepared and executed.
-    start_date : str or datetime
-        The starting date of the simulation.
-    end_date : str or datetime
-        The ending date of the simulation.
-    valid_start_date : str or datetime
-        The earliest allowed start date, based on, e.g. the availability of input data.
-    valid_end_date : str or datetime
-        The latest allowed end date, based on, e.g., the availability of input data.
-    codebase : ExternalCodeBase
-        The repository containing the base source code for this simulation.
-    marbl_codebase : MARBLExternalCodeBase
-        The repository containing the base source code for MARBL (Marine Biogeochemistry Library).
-    runtime_code : AdditionalCode
-        Additional code needed by ROMS at runtime (e.g. a `.in` file)
-    roms_runtime_settings : ROMSRuntimeSettings
-        A structured representation of the `.in` file found in runtime_code, available
-        after the code has been fetched with ROMSSimulation.runtime_code.get() or ROMSSimulation.setup()
-    compile_time_code : AdditionalCode
-        Additional ROMS source code to be included at compile time (e.g. `.opt` files)
-    model_grid : ROMSModelGrid
-        The model grid used in the simulation.
-    initial_conditions : ROMSInitialConditions
-        Initial conditions for the simulation.
-    tidal_forcing : ROMSTidalForcing
-        Tidal forcing data used in the simulation.
-    river_forcing : ROMSRiverForcing
-        River inflow data specifying locations and fluxes.
-    surface_forcing : list[ROMSSurfaceForcing]
-        List of surface forcing datasets.
-    boundary_forcing : list[ROMSBoundaryForcing]
-        List of boundary forcing datasets.
-    forcing_corrections : list[ROMSForcingCorrections]
-        List of forcing correction datasets.
-    exe_path : Path
-        Path to the compiled ROMS executable.
-    partitioned_files : List[Path]
-        Paths to partitioned input files for distributed ROMS runs.
-    input_datasets : list[ROMSInputDataset]
-        A flat list of all input datasets attached to this simulation.
-    codebases : list
-        List of all external codebases in use (e.g., ROMS, MARBL).
-    is_setup : bool
-        True if all required components have been retrieved and configured locally.
-
-
-    Methods
-    -------
-    setup()
-        Configures and prepares the ROMS simulation environment.
-    build(rebuild=False)
-        Compiles the ROMS executable if necessary.
-    pre_run()
-        Performs pre-processing steps before execution.
-    run(account_key=None, walltime=None, queue_name=None, job_name=None)
-        Submits the ROMS simulation for execution.
-    post_run()
-        Processes model outputs after execution.
-    restart(new_end_date)
-        Creates a new ROMS simulation instance from a restart file.
 
     See Also
     --------
@@ -147,9 +82,9 @@ class ROMSSimulation(Simulation):
 
         Parameters
         ----------
-        name : str
+        name
             The name of the simulation.
-        directory : str or Path
+        directory
             Path to the directory where simulation files and outputs will be stored.
         discretization : ROMSDiscretization
             The discretization settings defining the ROMS grid resolution and time step.

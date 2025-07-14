@@ -60,6 +60,7 @@ extensions = [
 numpydoc_show_class_members = True
 napolean_google_docstring = False
 napolean_numpy_docstring = True
+# napoleon_include_init_with_doc = True
 
 templates_path = ["_templates"]
 exclude_patterns = []
@@ -87,4 +88,8 @@ bibtex_reference_style = "author_year"
 html_theme_options = {
     "repository_url": "https://github.com/CWorthy-ocean/C-Star",
     "use_repository_button": True,
+}
+
+autodoc_default_options = {
+
 }
