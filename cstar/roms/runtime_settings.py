@@ -1,10 +1,11 @@
 import abc
 from pathlib import Path
+
+from types import UnionType
 from typing import (
     Any,
     ClassVar,
     Self,
-    Union,
     get_args,
     get_origin,
 )
@@ -229,7 +230,7 @@ class ROMSRuntimeSettingsSection(BaseModel, abc.ABC):
             annotation_origin = get_origin(annotation)
 
             # if, e.g. Optional[list[Path]] we just want list[Path]
-            if annotation_origin is Union:
+            if annotation_origin is UnionType:
                 annotation_args = get_args(annotation)
                 if (
                     type(None) in annotation_args and len(annotation_args) == 2
