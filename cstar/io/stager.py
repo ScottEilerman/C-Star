@@ -1,65 +1,105 @@
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING
+import functools
+from abc import ABC
+from typing import TYPE_CHECKING, ClassVar
+
+from cstar.base.exceptions import CstarError
+from cstar.io.retriever import get_retriever
+from cstar.io.source_data import SupportedSources
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from cstar.io import (
         LocalBinaryFileSource,
-        LocalFileRetriever,
-        LocalTextFileSource,
-        RemoteBinaryFileRetriever,
-        RemoteBinaryFileSource,
-        RemoteRepositoryRetriever,
         RemoteRepositorySource,
-        RemoteTextFileRetriever,
-        RemoteTextFileSource,
+        Retriever,
         SourceData,
-        StagedData,
         StagedFile,
         StagedRepository,
     )
 
+from typing import Generic, TypeVar
 
-class Stager(ABC):
-    @abstractmethod
-    def stage(self, target_dir: Path, source: "SourceData") -> "StagedData":
+S = TypeVar("S", bound=SourceData | RemoteRepositorySource)
+StD = TypeVar("StD", bound=StagedFile | StagedRepository)
+
+
+_registry: dict[SupportedSources, type["Stager"]] = {}
+
+
+def register_stager(
+    wrapped_cls: type["Stager"],
+) -> type["Stager"]:
+    """Register the decorated type as an available _SystemContext."""
+    _registry[wrapped_cls._characteristics] = wrapped_cls
+
+    @functools.wraps(wrapped_cls)
+    def _inner() -> type[Stager]:
+        """Return the original type after it is registered.
+
+        Returns
+        -------
+        type[_SystemContext]
+            The decorated type.
+        """
+        return wrapped_cls
+
+    return _inner()
+
+
+def get_stager(supported_source: SupportedSources) -> "Stager":
+    """Retrieve a system context from the context registry.
+
+    Returns
+    -------
+    _SystemContext
+        The context matching the supplied name.
+
+    Raises
+    ------
+    CStarError
+        If the supplied name has not been registered.
+    """
+    if stager := _registry.get(supported_source):
+        return stager()
+
+    raise CstarError(f"No stager for {supported_source}")
+
+
+class Stager(ABC, Generic[StD]):
+    _characteristics: ClassVar[SupportedSources]
+
+    def stage(self, target_dir: Path, source: SourceData) -> StD:
         """Stage this data using an appropriate strategy."""
-
-
-class RemoteBinaryFileStager(Stager):
-    # Used for e.g. a remote netCDF InputDataset
-    def stage(self, target_dir: Path, source: "RemoteBinaryFileSource") -> "StagedFile":  # type: ignore[override]
-        """Stage a remote binary file."""
-        retriever = RemoteBinaryFileRetriever()
-        retrieved_path = retriever.save(source=source, target_dir=target_dir)
-
+        retrieved_path = self.retriever.save(source=source, target_dir=target_dir)
         return StagedFile(
             source=source,
             path=retrieved_path,
-            sha256=(source.file_hash or None),
+            sha256=getattr(source, "file_hash"),
             stat=None,
         )
 
-
-class RemoteTextFileStager(Stager):
-    # Used for e.g. a remote yaml file
-    def stage(self, target_dir: Path, source: "RemoteTextFileSource") -> "StagedFile":  # type: ignore[override]
-        """Stage a remote text file."""
-        retriever = RemoteTextFileRetriever()
-        retrieved_path = retriever.save(source=source, target_dir=target_dir)
-
-        return StagedFile(
-            source=source,
-            path=retrieved_path,
-            sha256=(source.file_hash or None),
-            stat=None,
-        )
+    @property
+    def retriever(self) -> Retriever[S]:
+        return get_retriever(self._characteristics)
 
 
-class LocalBinaryFileStager(Stager):
+@register_stager
+class RemoteBinaryFileStager(Stager[StagedFile]):
+    _characteristics = SupportedSources.REMOTE_BINARY_FILE
+
+
+@register_stager
+class RemoteTextFileStager(Stager[StagedFile]):
+    _characteristics = SupportedSources.REMOTE_TEXT_FILE
+
+
+@register_stager
+class LocalBinaryFileStager(Stager[StagedFile]):
+    _characteristics = SupportedSources.LOCAL_BINARY_FILE
+
     # Used for e.g. a local netCDF InputDataset
-    def stage(self, target_dir: Path, source: "LocalBinaryFileSource") -> "StagedFile":  # type: ignore[override]
+    def stage(self, target_dir: Path, source: "LocalBinaryFileSource") -> "StagedFile":
         """Create a local symlink to a binary file on the current filesystem."""
         target_path = target_dir / source.filename
         target_path.symlink_to(source.location)
@@ -67,25 +107,22 @@ class LocalBinaryFileStager(Stager):
         return StagedFile(source=source, path=target_dir)
 
 
-class LocalTextFileStager(Stager):
-    # Used for e.g. a local yaml file
-    def stage(self, target_dir: Path, source: "LocalTextFileSource") -> "StagedFile":  # type: ignore[override]
-        """Create a local copy of a text file on the current filesystem."""
-        retriever = LocalFileRetriever()
-        retrieved_path = retriever.save(source=source, target_dir=target_dir)
-
-        return StagedFile(source=source, path=retrieved_path)
+@register_stager
+class LocalTextFileStager(Stager[StagedFile]):
+    _characteristics = SupportedSources.LOCAL_TEXT_FILE
 
 
-class RemoteRepositoryStager(Stager):
+@register_stager
+class RemoteRepositoryStager(Stager[StagedRepository]):
+    _characteristics = SupportedSources.REMOTE_REPOSITORY
+
     # Used for e.g. an ExternalCodeBase
     def stage(
         self,
         target_dir: Path,
-        source: "RemoteRepositorySource",  # type: ignore[override]
-    ) -> "StagedRepository":  # type: ignore[override]
+        source: "RemoteRepositorySource",
+    ) -> "StagedRepository":
         """Clone and checkout a git repository at a given target."""
-        retriever = RemoteRepositoryRetriever()
-        retrieved_path = retriever.save(source=source, target_dir=target_dir)
+        retrieved_path = self.retriever.save(source=source, target_dir=target_dir)
 
         return StagedRepository(source=source, path=retrieved_path)

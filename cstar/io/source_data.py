@@ -1,39 +1,119 @@
+import functools
 from abc import ABC, abstractmethod
 from collections.abc import Iterable, Iterator, Sequence
-from enum import Enum
+from dataclasses import dataclass
+from enum import Enum, StrEnum
+from functools import lru_cache
 from pathlib import Path
 from urllib.parse import urlparse
 
 import charset_normalizer
 import requests
 
+from cstar.base.exceptions import CstarError
 from cstar.base.utils import _run_cmd
 from cstar.io import (
-    LocalBinaryFileStager,
-    LocalTextFileStager,
-    RemoteBinaryFileStager,
-    RemoteRepositoryStager,
-    RemoteTextFileStager,
     StagedData,
     StagedDataCollection,
     Stager,
 )
+from cstar.io.stager import get_stager
 
 
-class SourceType(Enum):
+class SourceType(StrEnum):
     FILE = "file"
     DIRECTORY = "directory"
     REPOSITORY = "repository"
 
 
-class LocationType(Enum):
+class LocationType(StrEnum):
     HTTP = "http"
     PATH = "path"
 
 
-class FileEncoding(Enum):
+class FileEncoding(StrEnum):
     TEXT = "text"
     BINARY = "binary"
+    NA = "NA"
+
+
+@dataclass
+class SourceCharacteristics:
+    source_type: SourceType
+    location_type: LocationType
+    file_encoding: FileEncoding
+
+
+class SupportedSources(Enum):
+    REMOTE_TEXT_FILE = SourceCharacteristics(
+        SourceType.FILE, LocationType.HTTP, FileEncoding.TEXT
+    )
+    REMOTE_BINARY_FILE = SourceCharacteristics(
+        SourceType.FILE, LocationType.HTTP, FileEncoding.BINARY
+    )
+    LOCAL_TEXT_FILE = SourceCharacteristics(
+        SourceType.FILE, LocationType.PATH, FileEncoding.TEXT
+    )
+    LOCAL_BINARY_FILE = SourceCharacteristics(
+        SourceType.FILE, LocationType.PATH, FileEncoding.BINARY
+    )
+    REMOTE_REPOSITORY = SourceCharacteristics(
+        SourceType.REPOSITORY, LocationType.HTTP, FileEncoding.NA
+    )
+
+
+_registry: dict[SupportedSources, type["SourceData"]] = {}
+
+
+def register_source_data(
+    wrapped_cls: type["SourceData"],
+) -> type["SourceData"]:
+    """Register the decorated type as an available _SystemContext."""
+    _registry[wrapped_cls._characteristics] = wrapped_cls
+
+    @functools.wraps(wrapped_cls)
+    def _inner() -> type[SourceData]:
+        """Return the original type after it is registered.
+
+        Returns
+        -------
+        type[_SystemContext]
+            The decorated type.
+        """
+        return wrapped_cls
+
+    return _inner()
+
+
+def get_source_data(supported_source: SupportedSources) -> "SourceData":
+    """Retrieve a system context from the context registry.
+
+    Returns
+    -------
+    _SystemContext
+        The context matching the supplied name.
+
+    Raises
+    ------
+    CStarError
+        If the supplied name has not been registered.
+    """
+    if source_data := _registry.get(supported_source):
+        return source_data()
+
+    raise CstarError(f"No source_data for {supported_source}")
+
+
+@lru_cache(maxsize=16)
+def get_remote_header(location, n_bytes):
+    response = requests.get(location, stream=True, allow_redirects=True)
+    response.raw.decode_content = True
+    header_bytes = response.raw.read(n_bytes)
+    return header_bytes
+
+
+def match_characteristics(source_characteristics: SourceCharacteristics) -> str:
+    return SupportedSources(source_characteristics).name
 
 
 class _SourceInspector:
@@ -116,63 +196,45 @@ class _SourceInspector:
         if self.source_type is not SourceType.FILE:
             return None
 
-        def get_header_bytes(location, n_bytes=512) -> bytes:
-            if self.location_type is LocationType.HTTP:
-                response = requests.get(location, stream=True, allow_redirects=True)
-                response.raw.decode_content = True
-                header_bytes = response.raw.read(n_bytes)
-            elif self.location_type is LocationType.PATH:
-                with open(location, "rb") as f:
-                    header_bytes = f.read(n_bytes)
-            return header_bytes
+        n_bytes = 512
+        if self.location_type is LocationType.HTTP:
+            header_bytes = get_remote_header(self.location, n_bytes)
+        elif self.location_type is LocationType.PATH:
+            with open(self.location, "rb") as f:
+                header_bytes = f.read(n_bytes)
+        else:
+            raise ValueError(
+                f"Cannot determine file encoding for location type {self.location_type}"
+            )
 
-        best_encoding = charset_normalizer.from_bytes(
-            get_header_bytes(self.location)
-        ).best()
+        best_encoding = charset_normalizer.from_bytes(header_bytes).best()
         if best_encoding:
             return FileEncoding.TEXT
         else:
             return FileEncoding.BINARY
 
-    def infer_class(self) -> type["SourceData"]:
-        """Logic to determine the correct SourceData subclass based on the above
-        characteristics.
-        """
-        # Remote sources
-        if self.location_type is LocationType.HTTP:
-            if self.source_type is SourceType.REPOSITORY:
-                return RemoteRepositorySource
-
-            if self.source_type is SourceType.FILE:
-                if self.file_encoding is FileEncoding.BINARY:
-                    return RemoteBinaryFileSource
-                elif self.file_encoding is FileEncoding.TEXT:
-                    return RemoteTextFileSource
-
-        # Local sources
-        if (self.location_type is LocationType.PATH) and (
-            self.source_type is SourceType.FILE
-        ):
-            if self.file_encoding is FileEncoding.TEXT:
-                return LocalTextFileSource
-            elif self.file_encoding is FileEncoding.BINARY:
-                return LocalBinaryFileSource
-
-        raise ValueError(
-            f"Unable to determine an appropriate stager for data at {self.location}"
+    def get_characteristics(self) -> SourceCharacteristics:
+        return SourceCharacteristics(
+            source_type=self.source_type,
+            location_type=self.location_type,
+            file_encoding=self.file_encoding,
         )
 
 
 class SourceData(ABC):
+    _characteristics: SupportedSources
+
     def __init__(self, location: str | Path, identifier: str | None = None):
         self._location = str(location)
         self._identifier = identifier
+        # self._characteristics = _SourceInspector(location).get_characteristics()
 
-    @classmethod
-    def from_location(cls, location: str | Path, identifier: str | None = None):
-        cls = _SourceInspector(location=str(location)).infer_class()
+    @staticmethod
+    def from_location(location: str | Path, identifier: str | None = None):
+        inspector = _SourceInspector(location)
+        _cls = inspector.infer_class()
 
-        return cls(location=location, identifier=identifier)
+        return _cls(location=location, identifier=identifier)
 
     @property
     def location(self) -> str:
@@ -199,9 +261,8 @@ class SourceData(ABC):
         return self._location_as_path.suffix
 
     @property
-    @abstractmethod
     def stager(self) -> "Stager":
-        pass
+        return get_stager(self._characteristics)
 
     def stage(self, target_dir: str | Path) -> "StagedData":
         return self.stager.stage(target_dir=Path(target_dir), source=self)
@@ -212,35 +273,28 @@ class RemoteSourceData(SourceData, ABC):
     def _location_as_path(self) -> Path:
         return Path(urlparse(self.location).path)
 
+    @property
+    def file_hash(self) -> str | None:
+        return self._identifier
 
+
+@register_source_data
 class RemoteBinaryFileSource(RemoteSourceData):
-    @property
-    def file_hash(self) -> str | None:
-        return self._identifier
-
-    @property
-    def stager(self):
-        return RemoteBinaryFileStager
+    _characteristics = SupportedSources.REMOTE_BINARY_FILE
 
 
+@register_source_data
 class RemoteTextFileSource(RemoteSourceData):
-    @property
-    def file_hash(self) -> str | None:
-        return self._identifier
-
-    @property
-    def stager(self):
-        return RemoteTextFileStager
+    _characteristics = SupportedSources.REMOTE_TEXT_FILE
 
 
+@register_source_data
 class RemoteRepositorySource(RemoteSourceData):
+    _characteristics = SupportedSources.REMOTE_REPOSITORY
+
     @property
     def checkout_target(self) -> str | None:
         return self._identifier
-
-    @property
-    def stager(self):
-        return RemoteRepositoryStager
 
 
 class LocalSourceData(SourceData, ABC):
@@ -249,16 +303,14 @@ class LocalSourceData(SourceData, ABC):
         return Path(self.location).resolve()
 
 
-class LocalBinaryFileSource(SourceData):
-    @property
-    def stager(self):
-        return LocalBinaryFileStager
+@register_source_data
+class LocalBinaryFileSource(LocalSourceData):
+    _characteristics = SupportedSources.LOCAL_BINARY_FILE
 
 
-class LocalTextFileSource(SourceData):
-    @property
-    def stager(self):
-        return LocalTextFileStager
+@register_source_data
+class LocalTextFileSource(LocalSourceData):
+    _characteristics = SupportedSources.LOCAL_TEXT_FILE
 
 
 class SourceDataCollection:

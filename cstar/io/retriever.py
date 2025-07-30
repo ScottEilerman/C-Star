@@ -1,10 +1,13 @@
+import functools
 import hashlib
 import shutil
 from abc import ABC, abstractmethod
 from pathlib import Path
+from typing import Generic, TypeVar
 
 import requests
 
+from cstar.base.exceptions import CstarError
 from cstar.base.gitutils import _checkout, _clone
 from cstar.io import (
     LocalSourceData,
@@ -14,15 +17,65 @@ from cstar.io import (
     RemoteTextFileSource,
     SourceData,
 )
+from cstar.io.source_data import (
+    LocalBinaryFileSource,
+    LocalTextFileSource,
+    SupportedSources,
+)
+
+SD = TypeVar("SD", bound=SourceData)
+RSD = TypeVar("RSD", bound=RemoteSourceData)
 
 
-class Retriever(ABC):
+_registry: dict[SupportedSources, type["Retriever"]] = {}
+
+
+def register_retriever(
+    wrapped_cls: type["Retriever"],
+) -> type["Retriever"]:
+    """Register the decorated type as an available _SystemContext."""
+    _registry[wrapped_cls._characteristics] = wrapped_cls
+
+    @functools.wraps(wrapped_cls)
+    def _inner() -> type[Retriever]:
+        """Return the original type after it is registered.
+
+        Returns
+        -------
+        type[_SystemContext]
+            The decorated type.
+        """
+        return wrapped_cls
+
+    return _inner()
+
+
+def get_retriever(supported_source: SupportedSources) -> "Retriever":
+    """Retrieve a system context from the context registry.
+
+    Returns
+    -------
+    _SystemContext
+        The context matching the supplied name.
+
+    Raises
+    ------
+    CStarError
+        If the supplied name has not been registered.
+    """
+    if retriever := _registry.get(supported_source):
+        return retriever()
+
+    raise CstarError(f"No retriever for {supported_source}")
+
+
+class Retriever(Generic[SD], ABC):
     @abstractmethod
-    def read(self, source: SourceData) -> bytes:
+    def read(self, source: SD) -> bytes:
         """Retrieve data to memory, if supported"""
         pass
 
-    def save(self, target_dir: Path, source: SourceData) -> Path:
+    def save(self, target_dir: Path, source: SD) -> Path:
         """
         Save this object to the given directory.
 
@@ -41,13 +94,13 @@ class Retriever(ABC):
         return savepath
 
     @abstractmethod
-    def _save(self, target_dir: Path, source: SourceData) -> Path:
+    def _save(self, target_dir: Path, source: SD) -> Path:
         """Retrieve data to a local path"""
         pass
 
 
-class RemoteFileRetriever(Retriever, ABC):
-    def read(self, source: RemoteSourceData) -> bytes:  # type: ignore[override]
+class RemoteFileRetriever(Retriever, Generic[RSD], ABC):
+    def read(self, source: RSD) -> bytes:
         response = requests.get(source.location, allow_redirects=True)
         response.raise_for_status()
         data = response.content
@@ -55,15 +108,18 @@ class RemoteFileRetriever(Retriever, ABC):
         return data
 
     @abstractmethod
-    def _save(self, target_dir: Path, source: RemoteSourceData) -> Path:  # type: ignore[override]
+    def _save(self, target_dir: Path, source: RSD) -> Path:
         pass
 
 
-class RemoteBinaryFileRetriever(RemoteFileRetriever):
+@register_retriever
+class RemoteBinaryFileRetriever(RemoteFileRetriever[RemoteBinaryFileSource]):
+    _characteristics = SupportedSources.REMOTE_BINARY_FILE
+
     def _save(
         self,
         target_dir: Path,
-        source: RemoteBinaryFileSource,  # type: ignore[override]
+        source: RemoteBinaryFileSource,
     ) -> Path:
         hash_obj = hashlib.sha256()
 
@@ -92,8 +148,11 @@ class RemoteBinaryFileRetriever(RemoteFileRetriever):
         return target_path
 
 
+@register_retriever
 class RemoteTextFileRetriever(RemoteFileRetriever):
-    def _save(self, target_dir: Path, source: RemoteTextFileSource) -> Path:  # type: ignore[override]
+    _characteristics = SupportedSources.REMOTE_TEXT_FILE
+
+    def _save(self, target_dir: Path, source: RemoteTextFileSource) -> Path:
         data = self.read(source=source)
         target_path = target_dir / source.filename
         with open(target_path, "wb") as f:
@@ -101,22 +160,35 @@ class RemoteTextFileRetriever(RemoteFileRetriever):
         return target_path
 
 
-class LocalFileRetriever(Retriever):
-    def read(self, source: LocalSourceData) -> bytes:  # type: ignore[override]
+class LocalFileRetriever(Retriever[LocalSourceData]):
+    def read(self, source: LocalSourceData) -> bytes:
         with open(source.location, "rb") as f:
             return f.read()
 
-    def _save(self, target_dir: Path, source: LocalSourceData) -> Path:  # type: ignore[override]
+    def _save(self, target_dir: Path, source: LocalSourceData) -> Path:
         target_path = target_dir / source.filename
         shutil.copy2(src=Path(source.location).resolve(), dst=target_path)
         return target_path
 
 
-class RemoteRepositoryRetriever(Retriever):
-    def read(self, source: RemoteRepositorySource) -> bytes:  # type: ignore[override]
+@register_retriever
+class LocalBinaryFileRetriever(LocalFileRetriever[LocalBinaryFileSource]):
+    _characteristics = SupportedSources.LOCAL_BINARY_FILE
+
+
+@register_retriever
+class LocalTextFileRetriever(LocalFileRetriever[LocalTextFileSource]):
+    _characteristics = SupportedSources.LOCAL_TEXT_FILE
+
+
+@register_retriever
+class RemoteRepositoryRetriever(Retriever[RemoteRepositorySource]):
+    _characteristics = SupportedSources.REMOTE_REPOSITORY
+
+    def read(self, source: RemoteRepositorySource) -> bytes:
         raise NotImplementedError("Cannot 'read' a remote repository to memory")
 
-    def _save(self, target_dir: Path, source: RemoteRepositorySource) -> Path:  # type: ignore[override]
+    def _save(self, target_dir: Path, source: RemoteRepositorySource) -> Path:
         _clone(
             source_repo=source.location,
             local_path=target_dir,
