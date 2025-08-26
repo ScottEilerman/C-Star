@@ -5,6 +5,7 @@ ACTION_LOGIN := "login"
 ACTION_FETCH := "fetch"
 ACTION_RUN   := "run"
 ACTION_CLEAN := "clean"
+ACTION_MY_RUNNER := "my_runner"
 
 
 .PHONY : _build
@@ -55,6 +56,11 @@ IMG_RUNNER := runner
 .PHONY: runner
 runner: # conda roms marbl
 	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_RUNNER)
+
+IMG_MY_RUNNER := my_runner
+.PHONY: my_runner
+my_runner: # conda roms marbl
+	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_MY_RUNNER)
 
 .PHONY: buildhelp
 buildhelp:
@@ -110,3 +116,4 @@ all:
 	$(MAKE) roms
 	$(MAKE) marbl
 	$(MAKE) runner
+	$(MAKE) my_runner

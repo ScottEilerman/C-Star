@@ -16,17 +16,42 @@ ARG MPI_PROFILE="/etc/profile.d/ompi-5.0.7.sh"
 RUN mkdir -p "$SRC_DIR"
 
 WORKDIR "$SRC_DIR"
+RUN apt-get update && apt-get install -y libssl-dev autoconf automake libtool
+RUN git clone https://github.com/dun/munge.git && \
+  cd munge && \
+  ./bootstrap && \
+  ./configure \
+     --prefix=/usr \
+     --sysconfdir=/etc \
+     --localstatedir=/var \
+     --runstatedir=/run && \
+  make && \
+  make install
+
+
+
+RUN mkdir -p slurm && \
+    cd slurm && \
+    wget https://download.schedmd.com/slurm/slurm-24.11.6.tar.bz2 && \
+    tar -xaf slurm*tar.bz2 && \
+    cd slurm-24.11.6 && \
+    ./configure && \
+    make install && \
+    ldconfig -n /usr/local/lib
+
 RUN wget -q "$OPENMPI_URI" && \
     tar xvf "$OMPI_TGZ_NAME" && \
     cd "$OMPI_TGZ_OUT_DIR" && \
     ./configure \
         --prefix="$MPIHOME" --with-pic \
         --with-slurm \
-        --with-pmix=internal && \
+        --with-prrte \
+        --enable-mpirun-prefix-by-default \
+        --with-pmix && \
     make -j $(nproc) && make install && cd "$SRC_DIR" && \
     rm "$OMPI_TGZ_NAME" && \
     rm -rf "$OMPI_TGZ_OUT_DIR" && \
-    ldconfig
+    ldconfig 
 
 ENV PATH="$MPIHOME/bin:$PATH"
 ENV LD_LIBRARY_PATH="$MPIHOME/lib:$LD_LIBRARY_PATH"
