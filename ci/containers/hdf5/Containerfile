@@ -1,5 +1,5 @@
 ARG ACCT="C-Worthy"
-ARG IMG_MPI="$ACCT/cstar-mpi-5.0.7:latest"
+ARG IMG_MPI="$ACCT/cstar-mpich-4.2.2:latest"
 ARG SRC_DIR="/install"
 ARG INSTALL_BASE_DIR="/opt"
 

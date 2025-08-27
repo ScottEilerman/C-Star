@@ -17,14 +17,14 @@ IMG_BUILDBASE := buildbase
 buildbase:
 	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_BUILDBASE)
 
-IMG_MPI507 := mpi-5.0.7
-.PHONY: mpi5
-mpi5: # buildbase
-	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_MPI507)
+IMG_MPICH := mpich-4.2.2
+.PHONY: mpich
+mpich: # buildbase
+	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_MPICH)
 
 IMG_HDF5 := hdf5
 .PHONY: hdf5
-hdf5: # buildbase mpi5
+hdf5: # buildbase mpich
 	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_HDF5)
 
 IMG_NETCDF := netcdf
@@ -75,7 +75,7 @@ pullall:
 	$(MAKE) pull img=$(IMG_CONDA)
 	$(MAKE) pull img=$(IMG_PYTHON)
 	$(MAKE) pull img=$(IMG_BUILDBASE)
-	$(MAKE) pull img=$(IMG_MPI507)
+	$(MAKE) pull img=$(IMG_MPICH)
 	$(MAKE) pull img=$(IMG_HDF5)
 	$(MAKE) pull img=$(IMG_NETCDF)
 	$(MAKE) pull img=$(IMG_ROMS)
@@ -99,7 +99,7 @@ cleanall:
 	$(MAKE) clean img=$(IMG_ROMS)
 	$(MAKE) clean img=$(IMG_NETCDF)
 	$(MAKE) clean img=$(IMG_HDF5)
-	$(MAKE) clean img=$(IMG_MPI507)
+	$(MAKE) clean img=$(IMG_MPICH)
 	$(MAKE) clean img=$(IMG_BUILDBASE)
 
 .PHONY: login
@@ -110,10 +110,10 @@ login:
 all: 
 	$(MAKE) buildbase
 	$(MAKE) python
-	$(MAKE) mpi5
+	$(MAKE) mpich
 	$(MAKE) hdf5
 	$(MAKE) netcdf
 	$(MAKE) roms
 	$(MAKE) marbl
-	$(MAKE) runner
+	# $(MAKE) runner
 	$(MAKE) my_runner
