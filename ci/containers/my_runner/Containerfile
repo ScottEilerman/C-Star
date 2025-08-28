@@ -45,7 +45,7 @@ COPY --from=stage_roms $INSTALL_BASE_DIR/ucla-roms/ $INSTALL_BASE_DIR/ucla-roms/
 COPY --from=stage_marbl $INSTALL_BASE_DIR/marbl0.45.0/ $INSTALL_BASE_DIR/marbl0.45.0/
 COPY --from=stage_cstar $INSTALL_BASE_DIR/venv/ $INSTALL_BASE_DIR/venv/
 
-
+RUN apt-get update && apt-get remove -y gfortran && apt-get install -y gfortran-10 && ln -s /usr/bin/gfortran-10 /usr/bin/gfortran  
 
 WORKDIR $INSTALL_BASE_DIR
 RUN mkdir -p $INSTALL_BASE_DIR/work_internal/compile_time_code

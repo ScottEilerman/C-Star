@@ -13,6 +13,8 @@ ENV ROMS_PROFILE="/etc/profile.d/ucla-roms.sh"
 
 WORKDIR "$SRC_DIR"
 
+RUN apt-get update && apt-get remove -y gfortran && apt-get install -y gfortran-10 && ln -s /usr/bin/gfortran-10 /usr/bin/gfortran  
+
 RUN echo "export ROMS_ROOT=$ROMS_ROOT" >> $ROMS_PROFILE && \
     echo "export ROMS_PATH=$ROMS_PATH" >> $ROMS_PROFILE && \
     echo 'export PATH=$PATH:$ROMS_PATH' >> $ROMS_PROFILE

@@ -109,11 +109,13 @@ login:
 .PHONY: all
 all: 
 	$(MAKE) buildbase
-	$(MAKE) python
-	$(MAKE) mpich
+	$(MAKE) python	
 	$(MAKE) hdf5
 	$(MAKE) netcdf
 	$(MAKE) roms
 	$(MAKE) marbl
-	# $(MAKE) runner
 	$(MAKE) my_runner
+
+
+# $(MAKE) mpich
+# $(MAKE) runner
