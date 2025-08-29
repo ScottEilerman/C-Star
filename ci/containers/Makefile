@@ -59,7 +59,7 @@ runner: # conda roms marbl
 
 IMG_MY_RUNNER := my_runner
 .PHONY: my_runner
-my_runner: # conda roms marbl
+my_runner: roms marbl
 	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_MY_RUNNER)
 
 .PHONY: buildhelp

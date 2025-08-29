@@ -9,6 +9,7 @@ RUN apt-get update && \
         ca-certificates \
         git-all \
         gfortran \
+        libfabric-dev \
         libstdc++-14-dev \
         libxml2-dev \
         libcurl4-openssl-dev \
