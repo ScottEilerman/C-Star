@@ -56,11 +56,11 @@ RUN . /etc/profile && \
     cd "$NETCDF_SRC" && \ 
     ./configure \
     	--prefix=$NETCDF_HOME \
-    	CC=gcc FC=gfortran \
+    	CC=mpicc FC=mpifort \
 	CFLAGS="-O3 -march=x86-64 -I$HDF5_HOME/include" \
 	LDFLAGS="-L$HDF5_HOME/lib" \
-	--enable-netcdf-4 \
-	--enable-shared && \
+	--enable-netcdf-4  \
+	--enable-shared  \
     --enable-parallel-tests && \
     make -j $(nproc) && \
     make install && \
@@ -82,14 +82,14 @@ RUN . /etc/profile && \
     cd "$NETCDF_FORTRAN_SRC" && \
     ./configure \
         --prefix="$NETCDF_FORTRAN_HOME" \
-        CC=mpicc FC=gfortran \
+        CC=mpicc FC=mpifort \
         CFLAGS="-O3 -march=x86-64 -I$NETCDF_HOME/include" \
         FFLAGS="-O3 -march=x86-64 -I$NETCDF_HOME/include" \
         LDFLAGS="-L$NETCDF_HOME/lib" \
         --enable-shared && \
-    make -j $(nproc) && \
-    make install && \
-    rm -rf "$SRC_DIR"
+        make -j $(nproc) && \
+        make install && \
+        rm -rf "$SRC_DIR"
 
 WORKDIR "$INSTALL_BASE_DIR"
 
