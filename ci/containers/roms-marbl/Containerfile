@@ -1,5 +1,6 @@
 ARG ACCT="C-Worthy"
-ARG IMG_NCDF="$ACCT/cstar-netcdf:bf8d9e1"
+ARG FROM_TAG="latest"
+ARG IMG_NCDF="$ACCT/cstar-netcdf:$FROM_TAG"
 
 FROM $IMG_NCDF
 
