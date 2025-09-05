@@ -46,18 +46,18 @@ RUN \
 ARG mpich=4.2.2
 ARG mpich_prefix=mpich-$mpich
 ARG ncpus $(( $nproc / 8 ))
-RUN \
-    wget https://www.mpich.org/static/downloads/$mpich/$mpich_prefix.tar.gz && \
-    tar xvzf $mpich_prefix.tar.gz                                           && \
-    cd $mpich_prefix                                                        && \
-    ./configure                                                             && \
-    make -j $ncpus                                                          && \
-    make install                                                            && \
-    make clean                                                              && \
-    cd ..                                                                   && \
-    rm -rf $mpich_prefix
+# RUN \
+#     wget https://www.mpich.org/static/downloads/$mpich/$mpich_prefix.tar.gz && \
+#     tar xvzf $mpich_prefix.tar.gz                                           && \
+#     cd $mpich_prefix                                                        && \
+#     ./configure                                                             && \
+#     make -j $ncpus                                                          && \
+#     make install                                                            && \
+#     make clean                                                              && \
+#     cd ..                                                                   && \
+#     rm -rf $mpich_prefix
 
-RUN /sbin/ldconfig
+
 
 # ARG HDF5_INSTALL_DIR="hdf5-1.14.6-install"
 # ARG HDF5_TAR="hdf5_1.14.6.tar.gz"
@@ -99,7 +99,7 @@ WORKDIR $SRC_DIR
 #     tar xvf ./$HDF5_TAR && \
 #     rm ./$HDF5_TAR
 
-WORKDIR $HDF5_SRC
+# WORKDIR $HDF5_SRC
 # RUN mkdir -p $HDF5_HOME && \
 #     ./configure \
 #         --prefix=$HDF5_HOME \
@@ -111,18 +111,6 @@ WORKDIR $HDF5_SRC
 #     make -j $(nproc) && make install && \
 #     rm -rf $HDF5_SRC
 
-ENV PATH="$HDF5_HOME/bin:$PATH"
-ENV LD_LIBRARY_PATH="$HDF5_HOME/lib:$LD_LIBRARY_PATH"
-ENV CPATH="$HDF5_HOME/include:$CPATH"
-ENV LIBRARY_PATH="$HDF5_HOME/lib:$LIBRARY_PATH"
-ENV LD_RUN_PATH="$HDF5_HOME/lib:$LD_RUN_PATH"
-
-RUN echo "export HDF5_HOME=$HDF5_HOME" >> $HDF5_PROFILE && \
-    echo 'export PATH=$HDF5_HOME/bin:$PATH' >> $HDF5_PROFILE && \
-    echo 'export LD_LIBRARY_PATH=$HDF5_HOME/lib:$LD_LIBRARY_PATH' >> $HDF5_PROFILE && \
-    echo 'export CPATH=$HDF5_HOME/include:$CPATH' >> $HDF5_PROFILE && \
-    echo 'export LIBRARY_PATH=$HDF5_HOME/lib:$LIBRARY_PATH' >> $HDF5_PROFILE && \
-    echo 'export LD_RUN_PATH=$HDF5_HOME/lib:$LD_RUN_PATH' >> $HDF5_PROFILE
 
 
 ARG NETCDF_V="4.9.3"
@@ -137,6 +125,7 @@ ARG NETCDF_SRC="$SRC_DIR/netcdf-c-$NETCDF_V"
 ARG NETCDF_HOME="$INSTALL_BASE_DIR/netcdf-$NETCDF_V-install"
 ARG NETCDF_FORTRAN_SRC="$SRC_DIR/netcdf-fortran-$NETCDF_FV"
 ARG NETCDF_FORTRAN_HOME="$INSTALL_BASE_DIR/netcdf-fortran-$NETCDF_FV-install"
+
 
 WORKDIR "$SRC_DIR"
 # RUN . /etc/profile && \
@@ -154,15 +143,8 @@ WORKDIR "$SRC_DIR"
 #     make -j $(nproc) && \
 #     make install && \
 #     rm -rf "$SRC_DIR"
-ARG NCDF_PROFILE="/etc/profile.d/netcdf.sh"
 
-RUN echo "export NETCDF_HOME=$NETCDF_HOME" >> $NCDF_PROFILE && \
-    echo "export NETCDF_FORTRAN_HOME=$NETCDF_FORTRAN_HOME" >> $NCDF_PROFILE && \
-    echo 'export PATH=$NETCDF_FORTRAN_HOME/bin:$NETCDF_HOME/bin:$PATH' >> $NCDF_PROFILE && \
-    echo 'export LD_LIBRARY_PATH=$NETCDF_FORTRAN_HOME/lib:$NETCDF_HOME/lib:$LD_LIBRARY_PATH' >> $NCDF_PROFILE && \
-    echo 'export CPATH=$NETCDF_FORTRAN_HOME/include:$NETCDF_HOME/include:$CPATH' >> $NCDF_PROFILE && \
-    echo 'export LIBRARY_PATH=$NETCDF_FORTRAN_HOME/lib:$NETCDF_HOME/lib:$LIBRARY_PATH' >> $NCDF_PROFILE && \
-    echo "export NETCDFHOME=$NETCDF_HOME/lib" >> $NCDF_PROFILE
+
 
 WORKDIR "$SRC_DIR"
 # RUN . /etc/profile && \
@@ -182,48 +164,24 @@ WORKDIR "$SRC_DIR"
 #     rm -rf "$SRC_DIR"
 
 
-ENV ROMS_ROOT=$INSTALL_BASE_DIR/ucla-roms 
-ENV ROMS_PATH=$ROMS_ROOT/Tools-Roms
-ARG REPO_ROMS="https://github.com/ScottEilerman/ucla-roms/archive/refs/heads/sje-roms2.tar.gz"
-ENV ROMS_PROFILE="/etc/profile.d/ucla-roms.sh"
-
-RUN echo "export ROMS_ROOT=$ROMS_ROOT" >> $ROMS_PROFILE && \
-    echo "export ROMS_PATH=$ROMS_PATH" >> $ROMS_PROFILE && \
-    echo 'export PATH=$PATH:$ROMS_PATH' >> $ROMS_PROFILE
 
 
 
-
-
-ENV NETCDF_FORTRAN_HOME=/opt/cray/pe/netcdf/4.9.0.9/gnu/12.3/
-
-ENV PATH=$NETCDF_FORTRAN_HOME/bin:$NETCDF_HOME/bin:$PATH
-
-ENV LD_LIBRARY_PATH=$NETCDF_FORTRAN_HOME/lib:$NETCDF_HOME/lib:$LD_LIBRARY_PATH
-ENV CPATH=$NETCDF_FORTRAN_HOME/include:$NETCDF_HOME/include:$CPATH
-
-ENV LIBRARY_PATH=$NETCDF_FORTRAN_HOME/lib:$NETCDF_HOME/lib:$LIBRARY_PATH
+ENV NETCDF_DIR=/opt/cray/pe/netcdf/4.9.0.9/gnu/12.3
 
 
 ENV MPIHOME=/opt/cray/pe/mpich/8.1.30/ofi/gnu/12.3
 ENV NETCDFHOME=/opt/cray/pe/netcdf/4.9.0.9/gnu/12.3/
-ENV PATH=$PATH:$MPIHOME/bin:$NETCDFHOME/bin:$ROMS_PATH
-# ENV PATH=/opt/cray/pe/mpich/8.1.30/ofi/gnu/12.3/bin/:/opt/cray/pe/gcc-native/13/bin/:$PATH
-ENV NETCDF_DIR=/opt/cray/pe/netcdf/4.9.0.9/gnu/12.3
-
-
 ENV HDF5_HOME=/opt/cray/pe/hdf5/1.14.3.1/gnu/12.3
-ENV PATH="$HDF5_HOME/bin:$PATH"
-ENV LD_LIBRARY_PATH="$HDF5_HOME/lib:$LD_LIBRARY_PATH:/opt/cray/pe/lib64/"
-ENV CPATH="$HDF5_HOME/include:$CPATH"
-ENV LIBRARY_PATH="$HDF5_HOME/lib:$LIBRARY_PATH"
-ENV LD_RUN_PATH="$HDF5_HOME/lib:$LD_RUN_PATH"
 
-ARG TGZ_NAME="marbl0.45.0.tar.gz"
-ARG REPO_MARBL="https://github.com/marbl-ecosys/MARBL/archive/refs/tags/$TGZ_NAME"
+ENV PATH=$MPIHOME/bin:$NETCDFHOME/bin:$HDF5_HOME/bin:$ROMS_PATH:$PATH
+ENV LD_LIBRARY_PATH=$MPIHOME/lib:$NETCDF_FORTRAN_HOME/lib:$NETCDF_HOME/lib:$HDF5_HOME/lib:/opt/cray/pe/lib64/:$LD_LIBRARY_PATH
+ENV CPATH=$MPIHOME/include:$NETCDF_FORTRAN_HOME/include:$NETCDF_HOME/include:HDF5_HOME/include:$CPATH
+ENV LIBRARY_PATH=$$MPIHOME/lib:NETCDF_FORTRAN_HOME/lib:$NETCDF_HOME/lib:$HDF5_HOME/lib:$LIBRARY_PATH
+ENV LD_RUN_PATH="$MPIHOME/lib:$NETCDF_FORTRAN_HOME/lib:$NETCDF_HOME/lib:$HDF5_HOME/lib:/opt/cray/pe/lib64/:$LD_RUN_PATH"
+RUN /sbin/ldconfig
 
-ENV MARBL_ROOT=$INSTALL_BASE_DIR/marbl0.45.0
-ARG MARBL_PROFILE=/etc/profile.d/marbl.sh
+
 
 
 
@@ -236,37 +194,33 @@ ARG MARBL_PROFILE=/etc/profile.d/marbl.sh
 #     make COMPILER=gnu
 
 
-ARG REDO=21
-RUN . /etc/profile && \
-    wget -q "$REPO_ROMS" && \
-    tar xvf sje-roms2.tar.gz && \
-    mv ucla-roms-sje-roms2 "$ROMS_ROOT" && \
-    rm sje-roms2.tar.gz
-
-RUN \
-    cd "$ROMS_ROOT/Work" && \
-    make nhmg COMPILER=gnu
+#RUN \
+#    cd "$ROMS_ROOT/Work" && \
+#    make nhmg COMPILER=gnu
 # 
 # 
 # RUN which mpifort && which gfortran && which cpp
-RUN \
-   cd $ROMS_PATH && \
-   make COMPILER=gnu
+#RUN \
+#   cd $ROMS_PATH && \
+#   make COMPILER=gnu
 
 
+ARG MARBL_BASENAME=sje-marbl
+ARG TGZ_NAME="$MARBL_BASENAME.tar.gz"
+ARG REPO_MARBL="https://github.com/ScottEilerman/MARBL/archive/refs/heads/$TGZ_NAME"
+
+ENV MARBL_ROOT=$INSTALL_BASE_DIR/$MARBL_BASENAME
+ARG MARBL_PROFILE=/etc/profile.d/marbl.sh
 
 
-ARG REDO_2=2
-RUN export LD_LIBRARY_PATH=$MPIHOME/lib:$LD_LIBRARY_PATH && \
-export LIBRARY_PATH=$MPIHOME/lib:$LIBRARY_PATH && \
-export PATH=$MPIHOME/bin:$PATH && \
-    wget -q "$REPO_MARBL" && \
+ARG REDO_2=3
+RUN wget -q "$REPO_MARBL" && \
     tar xvf "$TGZ_NAME" && \
-    mv MARBL-marbl0.45.0 $MARBL_ROOT && \
+    mv MARBL-$MARBL_BASENAME $MARBL_ROOT && \
     rm "$TGZ_NAME" && \
     cd "$MARBL_ROOT/src" && \
     which mpifort && which mpif90 && env && sleep 2 && \
-    make USEMPI=TRUE FC=mpifort && \
+    make USEMPI=TRUE FC=mpif90 && \
     echo "export MARBL_ROOT=$MARBL_ROOT" >> $MARBL_PROFILE
 
 
@@ -274,16 +228,43 @@ ENV CSTAR_INTERACTIVE="0"
 ENV GIT_DISCOVERY_ACROSS_FILESYSTEM="1"
 
 
+ARG ROMS_BASENAME=mpi-masking
+ENV ROMS_ROOT=$INSTALL_BASE_DIR/ucla-roms 
+ENV ROMS_PATH=$ROMS_ROOT/Tools-Roms
+ARG REPO_ROMS="https://github.com/ScottEilerman/ucla-roms/archive/refs/heads/$ROMS_BASENAME.tar.gz"
+ENV ROMS_PROFILE="/etc/profile.d/ucla-roms.sh"
+
+RUN echo "export ROMS_ROOT=$ROMS_ROOT" >> $ROMS_PROFILE && \
+    echo "export ROMS_PATH=$ROMS_PATH" >> $ROMS_PROFILE && \
+    echo 'export PATH=$PATH:$ROMS_PATH' >> $ROMS_PROFILE
+
+ARG REDO=21
+RUN . /etc/profile && \
+    wget -q "$REPO_ROMS" && \
+    tar xvf $ROMS_BASENAME.tar.gz && \
+    mv ucla-roms-$ROMS_BASENAME "$ROMS_ROOT" && \
+    rm $ROMS_BASENAME.tar.gz
+
 WORKDIR /opt
 RUN mkdir -p /opt/work_internal/compile_time_code
 
-COPY * /opt/work_internal/compile_time_code
+
 
 # RUN bash -c "source /etc/profile && cd /opt/work_internal/compile_time_code && make compile_clean && make"
 
+RUN \
+    cd "$ROMS_ROOT/Work" && \
+    make tools-roms COMPILER=gnu
 
+ENV PATH=$PATH:$ROMS_PATH
 
-RUN cd /opt/work_internal/compile_time_code && make compile_clean && make COMPILER=gnu
-#BUILD_MODE=debug
+#RUN \
+#   cd $ROMS_PATH && \
+#   make COMPILER=gnu
+
+COPY * /opt/work_internal/compile_time_code
+
+RUN cd /opt/work_internal/compile_time_code && make compile_clean && make COMPILER=gnu 
+#BUILD_MODE=debug KEEP_PPSRC=true
 
 
