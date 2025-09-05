@@ -30,7 +30,7 @@ RUN mkdir -p $HDF5_HOME && \
         CFLAGS="-fPIC -O3 -march=x86-64" \
         FFLAGS="-fPIC -O3 -march=x86-64" \
         CXXFLAGS="-fPIC -O3 -march=x86-64" \
-        --enable-fortran --enable-shared --with-pic && \
+        --enable-fortran --enable-shared --with-pic --enable-parallel && \
     make -j $(nproc) && make install && \
     rm -rf $HDF5_SRC
 

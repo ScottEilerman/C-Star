@@ -1,19 +1,14 @@
-#mpich 4.2,2 for cpu
-FROM ubuntu:24.04
+
+ARG ACCT="C-Worthy"
+ARG FROM_TAG="latest"
+ARG IMG_BUILDBASE="$ACCT/cstar-buildbase:$FROM_TAG"
+
+FROM $IMG_BUILDBASE
 SHELL ["/bin/bash", "-c"]
 ENV DEBIAN_FRONTEND noninteractive
 WORKDIR /tmp
 
-RUN \
-    apt-get update        && \
-    apt-get install --yes    \
-                    --no-install-recommends \
-                    build-essential      \
-                    python3-dev          \
-                    gfortran             \
-                    wget              && \
-    apt-get install -y python3-pip && \
-    apt-get clean all
+
 
 ARG mpich=4.2.2
 ARG mpich_prefix=mpich-$mpich

@@ -47,34 +47,6 @@ ARG INSTALL_BASE_DIR
 COPY --from=stage_hdf /etc/profile.d/*.sh /etc/profile.d
 COPY --from=stage_hdf $HDF5_HOME $HDF5_HOME
 
-RUN \
-    apt-get update        && \
-    apt-get install --yes    \
-                    --no-install-recommends \
-                    build-essential      \
-                    binutils \
-                    build-essential \
-                    ca-certificates \
-                    git-all \
-                    gfortran \
-                    libfabric-dev \
-                    libstdc++-14-dev \
-                    libxml2-dev \
-                    libcurl4-openssl-dev \
-                    m4 \
-                    python3 \
-                    python3-pip \
-                    python3-venv \
-                    python-is-python3 \
-                    rsync \
-                    software-properties-common \
-            	    wget \
-                    zlib1g-dev \
-                    libssl-dev autoconf automake libtool \
-                    python3-dev          \
-                    wget              && \
-    apt-get install -y python3-pip && \
-    apt-get clean all
 
 WORKDIR "$SRC_DIR"
 RUN . /etc/profile && \
@@ -89,6 +61,7 @@ RUN . /etc/profile && \
 	LDFLAGS="-L$HDF5_HOME/lib" \
 	--enable-netcdf-4 \
 	--enable-shared && \
+    --enable-parallel-tests && \
     make -j $(nproc) && \
     make install && \
     rm -rf "$SRC_DIR"
