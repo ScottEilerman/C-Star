@@ -207,7 +207,8 @@ RUN /sbin/ldconfig
 
 ARG MARBL_BASENAME=sje-marbl
 ARG TGZ_NAME="$MARBL_BASENAME.tar.gz"
-ARG REPO_MARBL="https://github.com/ScottEilerman/MARBL/archive/refs/heads/$TGZ_NAME"
+# ARG REPO_MARBL="https://github.com/ScottEilerman/MARBL/archive/refs/heads/$TGZ_NAME"
+ARG REPO_MARBL="https://github.com/marbl-ecosys/MARBL/archive/refs/tags/$TGZ_NAME"
 
 ENV MARBL_ROOT=$INSTALL_BASE_DIR/$MARBL_BASENAME
 ARG MARBL_PROFILE=/etc/profile.d/marbl.sh
