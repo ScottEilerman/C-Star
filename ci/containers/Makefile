@@ -17,9 +17,14 @@ IMG_BUILDBASE := buildbase
 buildbase:
 	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_BUILDBASE)
 
-IMG_MPI507 := mpich-4.2.2
+IMG_MPICH := mpich-4.2.2
 .PHONY: mpich
 mpich: # buildbase
+	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_MPICH)
+
+IMG_MPI507 := mpi-5.0.7
+.PHONY: openmpi
+openmpi: # buildbase
 	$(MAKE) _build action=$(ACTION_BUILD) img=$(IMG_MPI507)
 
 IMG_HDF5 := hdf5
@@ -110,7 +115,7 @@ login:
 all: 
 	$(MAKE) buildbase
 	$(MAKE) python
-	$(MAKE) mpich
+	$(MAKE) openmpi
 	$(MAKE) hdf5
 	$(MAKE) netcdf
 	$(MAKE) roms
