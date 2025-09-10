@@ -3,49 +3,171 @@ ARG FROM_TAG="latest"
 
 ARG INSTALL_BASE_DIR="/opt"
 ARG PROFILE_DIR="/etc/profile.d"
+# NERSC Base Container
+#  OS: OpenSuse
 
-ARG mpich=4.2.2
-ARG mpich_prefix=mpich-$mpich
+FROM opensuse/leap:15.6
+WORKDIR /opt
 
-FROM ubuntu:24.04
-SHELL ["/bin/bash", "-c"]
-ENV DEBIAN_FRONTEND noninteractive
+# Build options
+ARG TARGETPLATFORM
+ARG TARGETARCH
+ARG TARGETOS
+
+RUN zypper --non-interactive install \
+    curl                      \
+    autoconf                  \
+    automake                  \
+    cmake                     \
+    libtool                   \
+    flex                      \
+    python3                   \
+    unzip                     \
+    git                       \
+    mlocate                   \
+    git                       \
+    tmux                      \
+    fish                      \
+    gzip                      \
+    bzip2                     \
+    libpmi0                   \
+    slurm                     \
+    vim                       \
+    gcc-c++                   \
+    gcc                       \
+    gfortran \
+    make                      \
+    wget                   && \
+    rm -rf /var/cache/zypp/*
+
+
+# Install CUDA toolkit
+ARG CUDA_VERSION=12.4.0
 WORKDIR /tmp
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+    export RUN_NAME=cuda_${CUDA_VERSION}_550.54.14_linux.run; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+    export RUN_NAME=cuda_${CUDA_VERSION}_550.54.14_linux_sbsa.run; \
+    fi && \
+    wget -q https://developer.download.nvidia.com/compute/cuda/${CUDA_VERSION}/local_installers/${RUN_NAME} -O cuda_${CUDA_VERSION}.run && \
+    sh cuda_${CUDA_VERSION}.run --toolkit --silent && \
+    rm -rf cuda_${CUDA_VERSION}.run
 
-RUN \
-    apt-get update        && \
-    apt-get install --yes    \
-                    --no-install-recommends \
-                    build-essential      \
-                    binutils \
-                    build-essential \
-                    ca-certificates \
-                    git-all \
-                    gfortran \
-                    libfabric-dev \
-                    libstdc++-14-dev \
-                    libxml2-dev \
-                    libcurl4-openssl-dev \
-                    m4 \
-                    python3 \
-                    python3-pip \
-                    python3-venv \
-                    python-is-python3 \
-                    rsync \
-                    software-properties-common \
-            	    wget \
-                    zlib1g-dev \
-                    libssl-dev autoconf automake libtool \
-                    python3-dev          \
-                    wget              && \
-    apt-get install -y python3-pip && \
-    apt-get clean all
+ENV CPATH=/usr/local/cuda/include:$CPATH
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LD_LIBRARY_PATH
+ENV PATH=/usr/local/cuda:$PATH
+ENV PATH=/usr/local/cuda/bin:$PATH
+ENV CUDA_ROOT=/usr/local/cuda
+ENV CUDA_HOME=/usr/local/cuda
+ENV CUDA_TOOLKIT_DIR=/usr/local/cuda
+
+# Install nvptx-tools
+WORKDIR /tmp
+RUN git clone --depth=1 https://github.com/SourceryTools/nvptx-tools.git && \
+    cd nvptx-tools                                                       && \
+    ./configure --with-cuda-driver-include=/usr/local/cuda/include          \
+    --with-cuda-driver-lib=/usr/local/cuda/lib64                            \
+    --prefix=/opt/nvptx/install                                          && \
+    make -j 4                                                            && \
+    make install                                                         && \
+    cd ..  && rm -rf nvptx-tools
+
+# Install GCC
+ARG NPROC=2
+ARG GCC_VERSION=13.2.0
+WORKDIR /tmp
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+    export ARCH=x86_64; \
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+    export ARCH=aarch64; \
+    fi && \
+    git clone --depth=1 git://sourceware.org/git/newlib-cygwin.git nvptx-newlib && \
+    git clone --depth=1 -b releases/gcc-$GCC_VERSION https://github.com/gcc-mirror/gcc.git gcc && \
+    cd gcc                                                                                     && \
+    contrib/download_prerequisites                                                             && \
+    ln -s ../nvptx-newlib/newlib newlib                                                        && \
+    cd ..                                                                                      && \
+    mkdir build_nvptx_gcc                                                                      && \
+    cd build_nvptx_gcc                                                                         && \
+    ../gcc/configure CC=/usr/bin/gcc CXX=/usr/bin/g++                   \
+    --host=${ARCH}-linux-gnu --target=nvptx-none                        \
+    --with-build-time-tools=/opt/nvptx/install/nvptx-none/bin           \
+    --enable-as-accelerator-for=${ARCH}-pc-linux-gnu                    \
+    --disable-sjlj-exceptions --enable-newlib-io-long-long              \
+    --enable-languages="c,c++,fortran,lto" --prefix=/opt/gcc/install && \
+    make -j ${NPROC}                                                 && \
+    make -j ${NPROC} install                                         && \
+    cd ..                                                            && \
+    mkdir build_host_gcc                                             && \
+    cd build_host_gcc                                                && \
+    ../gcc/configure CC=/usr/bin/gcc CXX=/usr/bin/g++                   \
+    --enable-offload-targets=nvptx-none                                 \
+    --with-cuda-driver-include=/usr/local/cuda/include                  \
+    --with-cuda-driver-lib=/usr/local/cuda/lib64                        \
+    --disable-bootstrap --disable-multilib                              \
+    --enable-languages="c,c++,fortran,lto" --prefix=/opt/gcc/install && \
+    make -j ${NPROC}                                                 && \
+    make -j ${NPROC} install                                         && \
+    cd .. && rm -rf /tmp/build_host_gcc \
+    /tmp/build_nvptx_gcc \
+    /tmp/gcc
+
+ENV PATH=/opt/gcc/install/bin:$PATH
+ENV PATH=/opt/gcc/install/include:$PATH
+ENV LD_LIBRARY_PATH=/opt/gcc/install/lib:$LD_LIBRARY_PATH
+ENV LD_LIBRARY_PATH=/opt/gcc/install/lib64:$LD_LIBRARY_PATH
 
 
-ARG mpich=4.2.2
-ARG mpich_prefix=mpich-$mpich
-ARG ncpus $(( $nproc / 8 ))
+# Install libfabric
+ARG LIBFABRIC_VERSION=1.20.0
+WORKDIR /tmp
+RUN wget -q https://github.com/ofiwg/libfabric/archive/v${LIBFABRIC_VERSION}.tar.gz && \
+    tar xf v${LIBFABRIC_VERSION}.tar.gz                                             && \
+    cd libfabric-${LIBFABRIC_VERSION}                                               && \
+    ./autogen.sh                                                                    && \
+    ./configure --prefix=/usr  --enable-only --enable-cxi --enable-tcp --enable-rxm    \
+                 --enable-udp --enable-shm --enable-sm2 --enable-rxd                   \
+                 --enable-hook_hmem --enable-hook_debug --enable-dmabuf_peer_mem    && \
+    make -j 8                                                                       && \
+    make install                                                                    && \
+    ldconfig                                                                        && \
+    cd ..                                                                           && \
+    rm -rf v${LIBFABRIC_VERSION}.tar.gz libfabric-${LIBFABRIC_VERSION}
 
+#                 --enable-rxd  --enable-udp --enable-shm --enable-sm2               && \
+
+# Install OpenMPI  using libfabric 
+ARG OPENMPI_VERSION=5.0.6
+WORKDIR /tmp
+RUN wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-$OPENMPI_VERSION.tar.gz && \
+    tar xf openmpi-$OPENMPI_VERSION.tar.gz                                                   && \
+    cd openmpi-$OPENMPI_VERSION                                                              && \
+    ./configure --with-libfabric=/usr                                                           \
+    --prefix=/usr                                                                               \
+    --with-slurm                                                                                \
+    --with-pmix                                                                              && \
+    make -j 8                                                                                && \
+    make install                                                                             && \
+    ldconfig                                                                                 && \
+    cd ..                                                                                    && \
+    rm -rf openmpi-$OPENMPI_VERSION.tar.gz openmpi-$OPENMPI_VERSION
+
+# Install AOCL
+ARG AOCL_VERSION=5.0.0
+WORKDIR /tmp
+RUN if [ "$TARGETARCH" = "amd64" ]; then \
+    wget -q https://download.amd.com/developer/eula/aocl/aocl-5-0/aocl-linux-gcc-${AOCL_VERSION}.tar.gz && \
+    tar -xvzf aocl-linux-gcc-${AOCL_VERSION}.tar.gz                                                  && \
+    cd aocl-linux-gcc-${AOCL_VERSION}                                                                && \
+    ./install.sh ;\
+    elif [ "$TARGETARCH" = "arm64" ]; then \
+    echo "Not installing AOCL on ARM"; \
+    fi
+
+
+# Puts you back in the root users home directory
+WORKDIR /root
 
 
 ARG SRC_DIR="/install"

@@ -11,28 +11,48 @@ ARG OMPI_TGZ_OUT_DIR="openmpi-5.0.7"
 
 ARG SRC_DIR="/install"
 ARG INSTALL_BASE_DIR="/opt"
-ENV MPIHOME="$INSTALL_BASE_DIR/$OMPI_TGZ_OUT_DIR"
+
 ARG MPI_PROFILE="/etc/profile.d/ompi-5.0.7.sh"
 
 RUN mkdir -p "$SRC_DIR"
 
 WORKDIR "$SRC_DIR"
 
+ENV MPIHOME=/usr
 
-RUN wget -q "$OPENMPI_URI" && \
-    tar xvf "$OMPI_TGZ_NAME" && \
-    cd "$OMPI_TGZ_OUT_DIR" && \
-    ./configure \
-        --prefix="$MPIHOME" --with-pic \
-        --with-slurm \
-        --with-prrte \
-        --enable-mpirun-prefix-by-default \
-        --with-pmix \
-        --with-libfabric && \
-    make -j $(nproc) && make install && cd "$SRC_DIR" && \
-    rm "$OMPI_TGZ_NAME" && \
-    rm -rf "$OMPI_TGZ_OUT_DIR" && \
-    ldconfig 
+# Install libfabric
+ARG LIBFABRIC_VERSION=1.20.0
+WORKDIR /tmp
+RUN wget -q https://github.com/ofiwg/libfabric/archive/v${LIBFABRIC_VERSION}.tar.gz && \
+    tar xf v${LIBFABRIC_VERSION}.tar.gz                                             && \
+    cd libfabric-${LIBFABRIC_VERSION}                                               && \
+    ./autogen.sh                                                                    && \
+    ./configure --prefix=/usr  --enable-only --enable-cxi --enable-tcp --enable-rxm    \
+                 --enable-udp --enable-shm --enable-sm2 --enable-rxd                   \
+                 --enable-hook_hmem --enable-hook_debug --enable-dmabuf_peer_mem    && \
+    make -j 8                                                                       && \
+    make install                                                                    && \
+    ldconfig                                                                        && \
+    cd ..                                                                           && \
+    rm -rf v${LIBFABRIC_VERSION}.tar.gz libfabric-${LIBFABRIC_VERSION}
+
+#                 --enable-rxd  --enable-udp --enable-shm --enable-sm2               && \
+
+# Install OpenMPI  using libfabric 
+ARG OPENMPI_VERSION=5.0.6
+WORKDIR /tmp
+RUN wget https://download.open-mpi.org/release/open-mpi/v5.0/openmpi-$OPENMPI_VERSION.tar.gz && \
+    tar xf openmpi-$OPENMPI_VERSION.tar.gz                                                   && \
+    cd openmpi-$OPENMPI_VERSION                                                              && \
+    ./configure --with-libfabric=/usr                                                           \
+    --prefix=/usr                                                                               \
+    --with-slurm                                                                                \
+    --with-pmix                                                                              && \
+    make -j 8                                                                                && \
+    make install                                                                             && \
+    ldconfig                                                                                 && \
+    cd ..                                                                                    && \
+    rm -rf openmpi-$OPENMPI_VERSION.tar.gz openmpi-$OPENMPI_VERSION
 
 ENV PATH="$MPIHOME/bin:$PATH"
 ENV LD_LIBRARY_PATH="$MPIHOME/lib:$LD_LIBRARY_PATH"
