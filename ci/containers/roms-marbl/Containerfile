@@ -4,18 +4,18 @@ ARG IMG_NCDF="$ACCT/cstar-netcdf:$FROM_TAG"
 
 FROM $IMG_NCDF
 
-ARG TGZ_NAME="marbl0.45.0.tar.gz"
-ARG REPO_MARBL="https://github.com/marbl-ecosys/MARBL/archive/refs/tags/$TGZ_NAME"
+ARG TGZ_NAME="sje-marbl.tar.gz"
+ARG REPO_MARBL="https://github.com/ScottEilerman/MARBL/archive/refs/heads/$TGZ_NAME"
 
 ENV INSTALL_BASE_DIR=/opt
-ENV MARBL_ROOT=$INSTALL_BASE_DIR/marbl0.45.0
+ENV MARBL_ROOT=$INSTALL_BASE_DIR/sje-marbl
 ARG MARBL_PROFILE=/etc/profile.d/marbl.sh
 
 
 WORKDIR "$INSTALL_BASE_DIR"
 RUN wget -q "$REPO_MARBL" && \
     tar xvf "$TGZ_NAME" && \
-    mv MARBL-marbl0.45.0 $MARBL_ROOT && \
+    mv MARBL-sje-marbl $MARBL_ROOT && \
     rm "$TGZ_NAME" && \
     cd "$MARBL_ROOT/src" && \
     make gnu USEMPI=TRUE && \

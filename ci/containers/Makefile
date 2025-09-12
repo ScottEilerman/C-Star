@@ -112,7 +112,7 @@ login:
 all: 
 	$(MAKE) buildbase
 	$(MAKE) python
-	$(MAKE) mpich
+	$(MAKE) openmpi
 	$(MAKE) hdf5
 	$(MAKE) netcdf
 	$(MAKE) roms
