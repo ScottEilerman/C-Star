@@ -1,3 +1,5 @@
+import logging
+import os
 import typing as t
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -18,9 +20,14 @@ from pydantic import (
     ValidationInfo,
     WithJsonSchema,
     field_validator,
-    model_validator,
+    model_validator, RootModel,
 )
 from pytimeparse import parse
+
+from cstar.base.log import get_logger
+
+# todo no debug logging
+logger = get_logger(__name__, level=logging.DEBUG)
 
 RequiredString: t.TypeAlias = t.Annotated[
     str,
@@ -38,8 +45,46 @@ TargetDirectoryPath = t.Annotated[
 ]
 """Path to a directory that may not exist until runtime."""
 
+class SingleDataFile(BaseModel):
+    location: FilePath | HttpUrl
+    hash: str | None = Field(default=None, init=False, validate_default=False)
+    documentation: str = Field(default="", validate_default=False)
+    """Description of input data provenance; used in provenance roll-up."""
 
-class Forcing(BaseModel): ...
+    locked: bool = Field(default=False, init=False, frozen=True)
+    """Mutability of the parameter set."""
+
+class InputDataset(RootModel):
+    root: list[SingleDataFile]
+
+
+
+
+#
+# class PathDatasource(BaseModel):
+#     category: t.Literal["path"] = "path"
+#     """The datasource category used as a type discriminator."""
+#
+#     location: list[FilePath | DirectoryPath | HttpUrl]
+#     """The path to the file or directory containg data."""
+
+
+class PathFilter(BaseModel):
+    """A filter used to specify a subset of files."""
+
+    category: t.Literal["path-filter"] = "path-filter"
+
+    directory: str | None = Field(default="", validate_default=False)
+    """Subdirectory that should be searched or kept."""
+
+    files: list[str] = Field(default_factory=list, validate_default=False)
+    """List of specific file names that must be kept.
+
+    File name filtering is combined with the directory filter, if one
+    is provided."""
+
+
+class Forcing(InputDataset): ...
 
 
 class ForcingConfiguration(BaseModel):
@@ -51,7 +96,7 @@ class ForcingConfiguration(BaseModel):
     surface: Forcing
     """Surface forcing"""
 
-    wind: Forcing
+    wind: Forcing | None = Field(None, validate_default = False)
     """Wind forcing."""
 
     tidal: Forcing | None = Field(None, validate_default=False)
@@ -61,7 +106,7 @@ class ForcingConfiguration(BaseModel):
     """River forcing."""
 
 
-class Grid(BaseModel):
+class Grid(InputDataset):
     """Specify the geographical boundary of the area of interest.
 
     NOTE: this is a temporary placeholder...
@@ -77,55 +122,20 @@ class Grid(BaseModel):
     -  180 is east
     """
 
-    min_latitude: float = Field(ge=-90.0, le=90.0)
-    """The minimum latitude value of the area."""
-
-    max_latitude: float = Field(ge=-90.0, le=90.0)
-    """The maximum latitude value of the area."""
-
-    min_longitude: float = Field(ge=-180.0, le=180.0)
-    """The minimum longitude value of the area."""
-
-    max_longitude: float = Field(ge=-180.0, le=180.0)
-    """The maximum longitude value of the area."""
-
-
-class PathDatasource(BaseModel):
-    category: t.Literal["path"]
-    """The datasource category used as a type discriminator."""
-
-    path: FilePath | DirectoryPath
-    """The path to the file or directory containg data."""
-
-
-class PathFilter(BaseModel):
-    """A filter used to specify a subset of files."""
-
-    category: t.Literal["path-filter"]
-
-    directory: str | None = Field(default="", validate_default=False)
-    """Subdirectory that should be searched or kept."""
-
-    files: list[str] = Field(default_factory=list, validate_default=False)
-    """List of specific file names that must be kept.
-
-    File name filtering is combined with the directory filter, if one
-    is provided."""
-
 
 class CodeRepository(BaseModel):
     """Reference to a remote code repository with optional path filtering
     and point-in-time specification.
     """
 
-    url: HttpUrl | str
+    location: HttpUrl | str
     """Location of the remote code repository."""
 
-    commit: str = Field(default="", min_length=1, validate_default=False)
+    checkout_target: str = Field(default="", min_length=1, validate_default=False)
     """A specific commit to be used."""
 
-    branch: str = Field(default="", min_length=1, validate_default=False)
-    """A specific branch to be used."""
+    # branch: str = Field(default="", min_length=1, validate_default=False)
+    # """A specific branch to be used."""
 
     filter: PathFilter | None = Field(default=None, validate_default=False)
     """A filter specifying the files to be retrieved and persisted from the repository."""
@@ -188,7 +198,11 @@ class Application(StrEnum):
     """A call to the hostname executable to simplify testing."""
 
 
+# class CommonFields(BaseModel):
+
+
 class ParameterSet(BaseModel):
+
     documentation: str = Field(default="", validate_default=False)
     """Description of input data provenance; used in provenance roll-up."""
 
@@ -201,8 +215,8 @@ class ParameterSet(BaseModel):
     """Mutability of the parameter set."""
 
     # NOTE: this doesn't support parameters without values (e.g. --no-truncate)
-    model_config: t.ClassVar[ConfigDict] = ConfigDict(extra="allow")
-    """Enable the model to parse user-defined attributes."""
+    # model_config: t.ClassVar[ConfigDict] = ConfigDict(extra="allow")
+    # """Enable the model to parse user-defined attributes."""
 
     @model_validator(mode="after")
     def _model_validator(self) -> "ParameterSet":
@@ -213,23 +227,24 @@ class ParameterSet(BaseModel):
         if self.locked and not self.hash:
             msg = "A locked parameter set must include a hash"
             raise ValueError(msg)
-
-        if self.model_extra:
-            for k, v in self.model_extra.items():
-                stripped = k.strip()
-
-                if " " in stripped or not stripped:
-                    msg = f"Parameter name `{k}` cannot include whitespace"
-                    raise ValueError(msg)
-                if not v.strip():
-                    msg = f"Parameter `{k}` does not have a value"
-                    raise ValueError(msg)
-
-                # re-write dynamic property keys without leading or trailing whitespace
-                if " " in k:
-                    # TODO: go see if this actually works in a test or if delattr is required
-                    self.model_extra.pop(k)
-                    self.model_extra.update({stripped: v})
+        # if self.model_extra:
+        #     for k, v in self.model_extra.items():
+        #         stripped = k.strip()
+        #
+        #         logger.debug(f"Handling user-specified extra param {k} with value {v}")
+        #
+        #         if " " in stripped or not stripped:
+        #             msg = f"Parameter name `{k}` cannot include whitespace"
+        #             raise ValueError(msg)
+        #         if not v.strip():
+        #             msg = f"Parameter `{k}` does not have a value"
+        #             raise ValueError(msg)
+        #
+        #         # re-write dynamic property keys without leading or trailing whitespace
+        #         if " " in k:
+        #             # TODO: go see if this actually works in a test or if delattr is required
+        #             self.model_extra.pop(k)
+        #             self.model_extra.update({stripped: v})
 
         return self
 
@@ -311,6 +326,8 @@ class PartitioningParameterSet(ParameterSet):
     n_procs_y: PositiveInt = 8
     """Number of processes used to subdivide the domain on the y-axis."""
 
+class ModelParameterSet(ParameterSet):
+    time_step: PositiveInt
 
 class Blueprint(BaseModel):
     name: RequiredString
@@ -334,21 +351,25 @@ class Blueprint(BaseModel):
     code: ROMSCompositeCodeRepository
     """Code repositories used to build, configure, and execute the ROMS simulation."""
 
+    initial_conditions: InputDataset
+
+    grid: InputDataset
+
     forcing: ForcingConfiguration
     """Forcing configuration."""
 
-    partitioning: PartitioningParameterSet = PartitioningParameterSet()
+    partitioning: PartitioningParameterSet
     """User-defined partitioning parameters."""
 
-    model_params: ParameterSet = ParameterSet()
+    model_params: ModelParameterSet
     """User-defined model parameters."""
 
     # should this be nullable instead of a union with a default?
     runtime_params: RuntimeParameterSet = RuntimeParameterSet()
     """User-defined runtime parameters."""
 
-    grid: Grid = Grid(min_latitude=0, max_latitude=0, min_longitude=0, max_longitude=0)
-    """TEMPORARY placeholder for the grid..."""
+
+    model_config = ConfigDict(extra='forbid')
 
     @model_validator(mode="after")
     def _model_validator(self) -> "Blueprint":
