@@ -222,7 +222,7 @@ class ROMSSimulation(Simulation):
             valid_start_date=valid_start_date,
             valid_end_date=valid_end_date,
         )
-
+        self._in_file = None
         self.model_grid = model_grid
         self.initial_conditions = initial_conditions
         self.tidal_forcing = tidal_forcing
@@ -252,10 +252,6 @@ class ROMSSimulation(Simulation):
         else:
             self.marbl_codebase = marbl_codebase
 
-        # Determine which runtime_code file corresponds to the `.in` runtime settings
-        # And set the in_file attribute to be used internally
-        self._find_dotin_file()
-
         # roms-specific
         self.exe_path: Path | None = None
         self._exe_hash: str | None = None
@@ -283,6 +279,12 @@ class ROMSSimulation(Simulation):
             raise RuntimeError(f"Only 1 .in file is allowed. Got: {in_files}")
 
         self._in_file = in_files[0]
+
+    @property
+    def in_file(self):
+        if self._in_file is None:
+            self._find_dotin_file()
+        return self._in_file
 
     def _check_forcing_collection_types(self, collection: list, expected_class: type):
         """Validate the types of input datasets in a forcing collection.
@@ -614,7 +616,7 @@ class ROMSSimulation(Simulation):
             )
 
         simulation_runtime_settings = ROMSRuntimeSettings.from_file(
-            self.runtime_code.working_path / self._in_file
+            self.runtime_code.working_path / self.in_file
         )
 
         # Modify each relevant section in the runtime settings object based on blueprint values

@@ -165,8 +165,8 @@ class SimulationRunner(Service):
             None,
         )
 
-        if self._output_root.exists() and outputs:
-            msg = f"Output directory {self._output_root} is not empty."
+        if self._output_dir.exists() and outputs:
+            msg = f"Output directory {self._output_dir} is not empty."
             raise ValueError(msg)
 
         # leftover external code folder causes non-empty repo errors; remove.
@@ -176,6 +176,12 @@ class SimulationRunner(Service):
             self.log.debug(msg)
             shutil.rmtree(externals_path)
         externals_path.mkdir(parents=True, exist_ok=False)
+
+        env_path = pathlib.Path("~/.cstar.env").expanduser()
+        if env_path.exists():
+            msg = f"Removing existing env file: {env_path}"
+            self.log.debug(msg)
+            env_path.unlink()
 
         # create a clean location to write outputs.
         if not self._output_dir.exists():
