@@ -108,7 +108,7 @@ def test_make_a_minimum_blueprint_yaml(
         forcing=ForcingConfiguration(
             boundary=Forcing(),
             surface=Forcing(),
-            wind=Forcing(),
+            corrections=Forcing(),
             tidal=Forcing(),
             river=Forcing(),
         ),

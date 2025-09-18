@@ -3,7 +3,7 @@ import typing as t
 from pathlib import Path
 
 from pydantic import BaseModel
-from yaml import parse, safe_load
+from yaml import safe_load
 
 from cstar.orchestration import models
 from cstar.roms import ROMSSimulation
@@ -58,7 +58,7 @@ def deserialize(
     path: Path,
     klass: type[_DT],
     mode: PersistenceMode = PersistenceMode.auto,
-) -> ROMSSimulation | None:
+) -> _DT:
     """Deserialize a blueprint into a Simulation instance.
 
     Parameters
@@ -110,5 +110,6 @@ def deserialize(
     # should return more than one.
     #
     # TODONT: Do NOT build a DAG at this level? again, info loss on conversion?
-    map_fn = adapter_map[klass]
-    return map_fn(model)
+    # map_fn = adapter_map[klass]
+    # return map_fn(model)
+    return model

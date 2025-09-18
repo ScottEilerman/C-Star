@@ -1,5 +1,4 @@
 import logging
-import os
 import typing as t
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -9,18 +8,16 @@ from pathlib import Path
 from pydantic import (
     BaseModel,
     ConfigDict,
-    DirectoryPath,
     Field,
     FilePath,
     HttpUrl,
-    PastDatetime,
     PlainSerializer,
     PositiveInt,
     StringConstraints,
     ValidationInfo,
     WithJsonSchema,
     field_validator,
-    model_validator, RootModel,
+    model_validator,
 )
 from pytimeparse import parse
 
@@ -45,19 +42,28 @@ TargetDirectoryPath = t.Annotated[
 ]
 """Path to a directory that may not exist until runtime."""
 
+
 class SingleDataFile(BaseModel):
     location: FilePath | HttpUrl
     hash: str | None = Field(default=None, init=False, validate_default=False)
+
+
+class SingleFileDataset(SingleDataFile):
     documentation: str = Field(default="", validate_default=False)
     """Description of input data provenance; used in provenance roll-up."""
 
     locked: bool = Field(default=False, init=False, frozen=True)
     """Mutability of the parameter set."""
 
-class InputDataset(RootModel):
-    root: list[SingleDataFile]
 
+class MultiFileDataset(BaseModel):
+    files: list[SingleDataFile]
 
+    documentation: str = Field(default="", validate_default=False)
+    """Description of input data provenance; used in provenance roll-up."""
+
+    locked: bool = Field(default=False, init=False, frozen=True)
+    """Mutability of the parameter set."""
 
 
 #
@@ -84,43 +90,23 @@ class PathFilter(BaseModel):
     is provided."""
 
 
-class Forcing(InputDataset): ...
-
-
 class ForcingConfiguration(BaseModel):
     """Configuration of the forcing parameters of the model."""
 
-    boundary: Forcing
+    boundary: MultiFileDataset
     """Boundary forcing."""
 
-    surface: Forcing
+    surface: MultiFileDataset
     """Surface forcing"""
 
-    wind: Forcing | None = Field(None, validate_default = False)
-    """Wind forcing."""
+    corrections: MultiFileDataset | None = Field(None, validate_default=False)
+    """Wind or other forcing corrections."""
 
-    tidal: Forcing | None = Field(None, validate_default=False)
+    tidal: SingleFileDataset | None = Field(None, validate_default=False)
     """Tidal forcing."""
 
-    river: Forcing | None = Field(None, validate_default=False)
+    river: SingleFileDataset | None = Field(None, validate_default=False)
     """River forcing."""
-
-
-class Grid(InputDataset):
-    """Specify the geographical boundary of the area of interest.
-
-    NOTE: this is a temporary placeholder...
-
-    Latitude Range:
-    - -90 is the South Pole
-    -   0 is the equator
-    -  90 is the North Pole
-
-    Longitude Range:
-    - -180 is west
-    -    0 is the prime meridian (Greenwich, London)
-    -  180 is east
-    """
 
 
 class CodeRepository(BaseModel):
@@ -131,14 +117,18 @@ class CodeRepository(BaseModel):
     location: HttpUrl | str
     """Location of the remote code repository."""
 
-    checkout_target: str = Field(default="", min_length=1, validate_default=False)
+    commit: str = Field(default="", min_length=1, validate_default=False)
     """A specific commit to be used."""
 
-    # branch: str = Field(default="", min_length=1, validate_default=False)
-    # """A specific branch to be used."""
+    branch: str = Field(default="", min_length=1, validate_default=False)
+    """A specific branch to be used."""
 
     filter: PathFilter | None = Field(default=None, validate_default=False)
     """A filter specifying the files to be retrieved and persisted from the repository."""
+
+    @property
+    def checkout_target(self) -> str:
+        return self.commit or self.branch
 
     @model_validator(mode="after")
     def _model_validator(self) -> "CodeRepository":
@@ -202,7 +192,6 @@ class Application(StrEnum):
 
 
 class ParameterSet(BaseModel):
-
     documentation: str = Field(default="", validate_default=False)
     """Description of input data provenance; used in provenance roll-up."""
 
@@ -255,10 +244,10 @@ class RuntimeParameterSet(ParameterSet):
     Supports user-defined attributes to enable customization.
     """
 
-    start_date: PastDatetime = datetime(1, 1, 1, tzinfo=timezone.utc)
+    start_date: datetime = datetime(1, 1, 1, tzinfo=timezone.utc)
     """Start of data time range to be used in the simulation."""
 
-    end_date: PastDatetime = datetime(2, 1, 1, tzinfo=timezone.utc)
+    end_date: datetime = datetime(2, 1, 1, tzinfo=timezone.utc)
     """End of data time range to be used in the simulation."""
 
     # restart_freq: str
@@ -326,8 +315,10 @@ class PartitioningParameterSet(ParameterSet):
     n_procs_y: PositiveInt = 8
     """Number of processes used to subdivide the domain on the y-axis."""
 
+
 class ModelParameterSet(ParameterSet):
     time_step: PositiveInt
+
 
 class Blueprint(BaseModel):
     name: RequiredString
@@ -342,18 +333,18 @@ class Blueprint(BaseModel):
     state: BlueprintState = BlueprintState.NotSet
     """The current validation status of the blueprint."""
 
-    valid_start_date: PastDatetime
+    valid_start_date: datetime
     """Beginning of the time range for the available data."""
 
-    valid_end_date: PastDatetime
+    valid_end_date: datetime
     """End of the time range for the available data."""
 
     code: ROMSCompositeCodeRepository
     """Code repositories used to build, configure, and execute the ROMS simulation."""
 
-    initial_conditions: InputDataset
+    initial_conditions: SingleFileDataset
 
-    grid: InputDataset
+    grid: SingleFileDataset
 
     forcing: ForcingConfiguration
     """Forcing configuration."""
@@ -368,8 +359,7 @@ class Blueprint(BaseModel):
     runtime_params: RuntimeParameterSet = RuntimeParameterSet()
     """User-defined runtime parameters."""
 
-
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
     def _model_validator(self) -> "Blueprint":

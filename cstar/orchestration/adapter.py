@@ -10,6 +10,7 @@ from cstar.roms.discretization import ROMSDiscretization
 from cstar.roms.external_codebase import ROMSExternalCodeBase
 from cstar.roms.input_dataset import (
     ROMSBoundaryForcing,
+    ROMSForcingCorrections,
     ROMSInitialConditions,
     ROMSModelGrid,
     ROMSRiverForcing,
@@ -52,7 +53,7 @@ class DiscretizationAdapter(ModelAdapter[models.Blueprint, ROMSDiscretization]):
     @t.override
     def adapt(self) -> ROMSDiscretization:
         return ROMSDiscretization(
-            time_step=1,
+            time_step=self.model.model_params.time_step,
             n_procs_x=self.model.partitioning.n_procs_x,
             n_procs_y=self.model.partitioning.n_procs_y,
         )
@@ -70,9 +71,9 @@ class AddtlCodeAdapter(ModelAdapter[models.Blueprint, AdditionalCode]):
         code_attr: models.CodeRepository = getattr(self.model.code, self.key)
 
         return AdditionalCode(
-            location=(self.model.runtime_params.output_dir / "runtime").as_posix(),
+            location=code_attr.location,
             subdir=(str(code_attr.filter.directory) if code_attr.filter else ""),
-            checkout_target=code_attr.commit or code_attr.branch,
+            checkout_target=code_attr.checkout_target,
             files=(code_attr.filter.files if code_attr.filter else []),
         )
 
@@ -83,8 +84,8 @@ class CodebaseAdapter(ModelAdapter[models.Blueprint, ROMSExternalCodeBase]):
     @t.override
     def adapt(self) -> ROMSExternalCodeBase:
         return ROMSExternalCodeBase(
-            source_repo=str(self.model.code.roms.url),
-            checkout_target=self.model.code.roms.commit or self.model.code.roms.branch,
+            source_repo=str(self.model.code.roms.location),
+            checkout_target=self.model.code.roms.checkout_target,
         )
 
 
@@ -98,8 +99,8 @@ class MARBLAdapter(ModelAdapter[models.Blueprint, MARBLExternalCodeBase]):
             raise RuntimeError(msg)
 
         return MARBLExternalCodeBase(
-            source_repo=str(self.model.code.marbl.url),
-            checkout_target=self.model.code.marbl.commit
+            source_repo=str(self.model.code.marbl.location),
+            checkout_target=self.model.code.marbl.checkout_target
             or self.model.code.marbl.branch,
         )
 
@@ -110,26 +111,23 @@ class GridAdapter(ModelAdapter[models.Blueprint, ROMSModelGrid]):
     @t.override
     def adapt(self) -> ROMSModelGrid:
         return ROMSModelGrid(
-            location=str(self.model.runtime_params.output_dir / "model_grid"),
-            # WARNING - path is not valid...
-            file_hash="",
-            start_date=self.model.runtime_params.start_date,
-            end_date=self.model.runtime_params.start_date,
+            location=self.model.grid.location,
+            file_hash=self.model.grid.hash,
+            start_date=self.model.valid_start_date,
+            end_date=self.model.valid_end_date,
         )
 
 
-class ConditionAdapter(ModelAdapter[models.Blueprint, ROMSInitialConditions]):
+class InitialConditionAdapter(ModelAdapter[models.Blueprint, ROMSInitialConditions]):
     """Create a ROMSInitialCondition from a blueprint model."""
 
     @t.override
     def adapt(self) -> ROMSInitialConditions:
         return ROMSInitialConditions(
-            location=str(
-                self.model.runtime_params.output_dir / "initial_conditions",
-            ),
-            # WARNING - path is not valid...
-            start_date=self.model.runtime_params.start_date,
-            end_date=self.model.runtime_params.start_date,
+            location=self.model.initial_conditions.location,
+            file_hash=self.model.initial_conditions.hash,
+            start_date=self.model.valid_start_date,
+            end_date=self.model.valid_end_date,
         )
 
 
@@ -141,16 +139,15 @@ class TidalForcingAdapter(ModelAdapter[models.Blueprint, ROMSTidalForcing]):
     #     self.key = key
 
     @t.override
-    def adapt(self) -> ROMSTidalForcing:
+    def adapt(self) -> ROMSTidalForcing | None:
         # code_attr: models.Forcing = getattr(self.model.code, self.key)
-
+        if self.model.forcing.tidal is None:
+            return None
         return ROMSTidalForcing(
-            location=str(
-                self.model.runtime_params.output_dir / "forcing/tidal",
-            ),
-            # WARNING - path is not valid...
-            start_date=self.model.runtime_params.start_date,
-            end_date=self.model.runtime_params.start_date,
+            location=self.model.forcing.tidal.location,
+            file_hash=self.model.forcing.tidal.hash,
+            start_date=self.model.valid_start_date,
+            end_date=self.model.valid_end_date,
         )
 
 
@@ -162,20 +159,20 @@ class RiverForcingAdapter(ModelAdapter[models.Blueprint, ROMSRiverForcing]):
     #     self.key = key
 
     @t.override
-    def adapt(self) -> ROMSRiverForcing:
+    def adapt(self) -> ROMSRiverForcing | None:
         # code_attr: models.Forcing = getattr(self.model.code, self.key)
+        if self.model.forcing.river is None:
+            return None
 
         return ROMSRiverForcing(
-            location=str(
-                self.model.runtime_params.output_dir / "forcing/river",
-            ),
-            # WARNING - path is not valid...
-            start_date=self.model.runtime_params.start_date,
-            end_date=self.model.runtime_params.start_date,
+            location=self.model.forcing.river.location,
+            file_hash=self.model.forcing.river.hash,
+            start_date=self.model.valid_start_date,
+            end_date=self.model.valid_end_date,
         )
 
 
-class BoundaryForcingAdapter(ModelAdapter[models.Blueprint, ROMSBoundaryForcing]):
+class BoundaryForcingAdapter(ModelAdapter[models.Blueprint, list[ROMSBoundaryForcing]]):
     """Create a ROMSBoundaryForcing from a blueprint model."""
 
     # def __init__(self, model: models.Blueprint, key: str) -> None:
@@ -183,20 +180,21 @@ class BoundaryForcingAdapter(ModelAdapter[models.Blueprint, ROMSBoundaryForcing]
     #     self.key = key
 
     @t.override
-    def adapt(self) -> ROMSBoundaryForcing:
+    def adapt(self) -> list[ROMSBoundaryForcing]:
         # code_attr: models.Forcing = getattr(self.model.code, self.key)
 
-        return ROMSBoundaryForcing(
-            location=str(
-                self.model.runtime_params.output_dir / "forcing/boundary",
-            ),
-            # WARNING - path is not valid...
-            start_date=self.model.runtime_params.start_date,
-            end_date=self.model.runtime_params.start_date,
-        )
+        return [
+            ROMSBoundaryForcing(
+                location=f.location,
+                file_hash=f.hash,
+                start_date=self.model.valid_start_date,
+                end_date=self.model.valid_end_date,
+            )
+            for f in self.model.forcing.boundary.files
+        ]
 
 
-class SurfaceForcingAdapter(ModelAdapter[models.Blueprint, ROMSSurfaceForcing]):
+class SurfaceForcingAdapter(ModelAdapter[models.Blueprint, list[ROMSSurfaceForcing]]):
     """Create a ROMSSurfaceForcing from a blueprint model."""
 
     # def __init__(self, model: models.Blueprint, key: str) -> None:
@@ -204,17 +202,37 @@ class SurfaceForcingAdapter(ModelAdapter[models.Blueprint, ROMSSurfaceForcing]):
     #     self.key = key
 
     @t.override
-    def adapt(self) -> ROMSSurfaceForcing:
+    def adapt(self) -> list[ROMSSurfaceForcing]:
         # code_attr: models.Forcing = getattr(self.model.code, self.key)
 
-        return ROMSSurfaceForcing(
-            location=str(
-                self.model.runtime_params.output_dir / "forcing/surface",
-            ),
-            # WARNING - path is not valid...
-            start_date=self.model.runtime_params.start_date,
-            end_date=self.model.runtime_params.start_date,
-        )
+        return [
+            ROMSSurfaceForcing(
+                location=f.location,
+                file_hash=f.hash,
+                start_date=self.model.valid_start_date,
+                end_date=self.model.valid_end_date,
+            )
+            for f in self.model.forcing.surface.files
+        ]
+
+
+class ForcingCorrectionAdapter(
+    ModelAdapter[models.Blueprint, list[ROMSForcingCorrections]]
+):
+    @t.override
+    def adapt(self) -> list[ROMSForcingCorrections] | None:
+        # code_attr: models.Forcing = getattr(self.model.code, self.key)
+        if self.model.forcing.corrections is None:
+            return None
+        return [
+            ROMSForcingCorrections(
+                location=f.location,
+                file_hash=f.hash,
+                start_date=self.model.valid_start_date,
+                end_date=self.model.valid_end_date,
+            )
+            for f in self.model.forcing.corrections.files
+        ]
 
 
 class BlueprintAdapter(ModelAdapter[models.Blueprint, ROMSSimulation]):
@@ -240,15 +258,10 @@ class BlueprintAdapter(ModelAdapter[models.Blueprint, ROMSSimulation]):
                 MARBLAdapter(self.model).adapt() if self.model.code.marbl else None
             ),
             model_grid=GridAdapter(self.model).adapt(),
-            initial_conditions=ConditionAdapter(self.model).adapt(),
+            initial_conditions=InitialConditionAdapter(self.model).adapt(),
             tidal_forcing=TidalForcingAdapter(self.model).adapt(),
             river_forcing=RiverForcingAdapter(self.model).adapt(),
-            boundary_forcing=[
-                # WARNING - current schema does not take into account a forcing LIST
-                BoundaryForcingAdapter(self.model).adapt(),
-            ],
-            surface_forcing=[
-                # WARNING - current schema does not take into account a forcing LIST
-                SurfaceForcingAdapter(self.model).adapt(),
-            ],
+            forcing_corrections=ForcingCorrectionAdapter(self.model).adapt(),
+            boundary_forcing=BoundaryForcingAdapter(self.model).adapt(),
+            surface_forcing=SurfaceForcingAdapter(self.model).adapt(),
         )
