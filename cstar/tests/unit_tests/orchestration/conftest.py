@@ -442,24 +442,47 @@ def fill_blueprint_template(
             valid_end_date: 2020-02-01 00:00:00
             code:
               roms:
-                url: http://github.com/ankona/ucla-roms
+                location: http://github.com/ankona/ucla-roms
                 branch: main
                 filter: null
               run_time:
-                url: http://github.com/ankona/ucla-roms
+                location: http://github.com/ankona/ucla-roms
                 branch: main
                 filter: null
               compile_time:
-                url: http://github.com/ankona/ucla-roms
+                location: http://github.com/ankona/ucla-roms
                 branch: main
                 filter: null
               marbl: null
             forcing:
-              boundary: {{}}
-              surface: {{}}
-              wind: {{}}
-              tidal: {{}}
-              river: {{}}
+              boundary:
+                documentation: http://mockdoc.com/partitioning
+                locked: false
+                files:
+                - location: http://mockdoc.com/partitioning.nc
+                  hash: abc123
+              surface:
+                documentation: http://mockdoc.com/partitioning
+                locked: false
+                files:
+                - location: http://mockdoc.com/partitioning.nc
+                  hash: abc123
+              corrections:
+                documentation: http://mockdoc.com/partitioning
+                locked: false
+                files:
+                - location: http://mockdoc.com/partitioning.nc
+                  hash: abc123
+              tidal:
+                documentation: http://mockdoc.com/partitioning
+                locked: false
+                location: http://mockdoc.com/partitioning.nc
+                hash: abc123
+              river:
+                documentation: http://mockdoc.com/partitioning
+                locked: false
+                location: http://mockdoc.com/partitioning.nc
+                hash: abc123
             partitioning:
               documentation: http://mockdoc.com/partitioning
               hash: null
@@ -479,10 +502,11 @@ def fill_blueprint_template(
               checkpoint_frequency: 1d
               output_dir: .
             grid:
-              min_latitude: 0.0
-              max_latitude: 10.0
-              min_longitude: 0.0
-              max_longitude: 10.0
+              location: http://mockdoc.com/grid
+            initial_conditions:
+              location: http://mockdoc.com/grid
+            model_params:
+              time_step: 1
             """,
         )
 
