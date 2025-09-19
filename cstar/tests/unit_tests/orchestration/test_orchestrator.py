@@ -11,16 +11,15 @@ from cstar.orchestration.models import (
     Blueprint,
     BlueprintState,
     CodeRepository,
-    Forcing,
     ForcingConfiguration,
-    Grid,
     ParameterSet,
     PartitioningParameterSet,
     ROMSCompositeCodeRepository,
     RuntimeParameterSet,
-    Workplan,
+    Workplan, SingleDataFile,
 )
 from cstar.orchestration.orchestrator import GraphPlanner, SerialPlanner
+from orchestration.models import SingleFileDataset, MultiFileDataset, ModelParameterSet
 
 
 @pytest.fixture
@@ -92,30 +91,31 @@ def test_make_a_minimum_blueprint_yaml(
         valid_end_date=datetime.datetime(2020, 2, 1, 0, 0, 0),
         code=ROMSCompositeCodeRepository(
             roms=CodeRepository(
-                url="http://github.com/ankona/ucla-roms",
+                location="http://github.com/ankona/ucla-roms",
                 branch="main",
             ),
             run_time=CodeRepository(
-                url="http://github.com/ankona/ucla-roms",
+                location="http://github.com/ankona/ucla-roms",
                 branch="main",
             ),
             compile_time=CodeRepository(
-                url="http://github.com/ankona/ucla-roms",
+                location="http://github.com/ankona/ucla-roms",
                 branch="main",
             ),
             marbl=None,
         ),
         forcing=ForcingConfiguration(
-            boundary=Forcing(),
-            surface=Forcing(),
-            corrections=Forcing(),
-            tidal=Forcing(),
-            river=Forcing(),
+            boundary=MultiFileDataset(files=[SingleDataFile(location=random_file)]),
+            surface=MultiFileDataset(files=[SingleDataFile(location=random_file)]),
+            corrections=MultiFileDataset(files=[SingleDataFile(location=random_file)]),
+            tidal=SingleFileDataset(location=random_file),
+            river=SingleFileDataset(location=random_file),
         ),
         partitioning=PartitioningParameterSet(),
-        model_params=ParameterSet(),
+        model_params=ModelParameterSet(time_step=1),
         runtime_params=RuntimeParameterSet(),
-        grid=Grid(min_latitude=0, max_latitude=10, min_longitude=0, max_longitude=10),
+        grid=SingleFileDataset(location=random_file),
+        initial_conditions=SingleFileDataset(location=random_file),
     )
 
     bp_yaml = serialize_blueprint(blueprint, bp_path)

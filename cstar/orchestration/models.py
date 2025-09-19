@@ -3,7 +3,7 @@ import typing as t
 from copy import deepcopy
 from datetime import datetime, timezone
 from enum import StrEnum, auto
-from pathlib import Path
+from pathlib import Path, PosixPath
 
 from pydantic import (
     BaseModel,
@@ -43,31 +43,31 @@ TargetDirectoryPath = t.Annotated[
 """Path to a directory that may not exist until runtime."""
 
 
-class SingleDataFile(BaseModel):
-    location: FilePath | HttpUrl
+class ConfiguredBaseModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", from_attributes=True)
+
+class HashableFile(ConfiguredBaseModel):
+    location: str
     hash: str | None = Field(default=None, init=False, validate_default=False)
 
 
-class SingleFileDataset(SingleDataFile):
+class DocLocMixin(ConfiguredBaseModel):
     documentation: str = Field(default="", validate_default=False)
     """Description of input data provenance; used in provenance roll-up."""
 
     locked: bool = Field(default=False, init=False, frozen=True)
     """Mutability of the parameter set."""
 
+class SingleFileDataset(HashableFile, DocLocMixin):
+    pass
 
-class MultiFileDataset(BaseModel):
-    files: list[SingleDataFile]
 
-    documentation: str = Field(default="", validate_default=False)
-    """Description of input data provenance; used in provenance roll-up."""
-
-    locked: bool = Field(default=False, init=False, frozen=True)
-    """Mutability of the parameter set."""
+class MultiFileDataset(DocLocMixin, ConfiguredBaseModel):
+    files: list[HashableFile] = Field(default_factory=list)
 
 
 #
-# class PathDatasource(BaseModel):
+# class PathDatasource(ConfiguredBaseModel):
 #     category: t.Literal["path"] = "path"
 #     """The datasource category used as a type discriminator."""
 #
@@ -75,7 +75,7 @@ class MultiFileDataset(BaseModel):
 #     """The path to the file or directory containg data."""
 
 
-class PathFilter(BaseModel):
+class PathFilter(ConfiguredBaseModel):
     """A filter used to specify a subset of files."""
 
     category: t.Literal["path-filter"] = "path-filter"
@@ -90,7 +90,7 @@ class PathFilter(BaseModel):
     is provided."""
 
 
-class ForcingConfiguration(BaseModel):
+class ForcingConfiguration(ConfiguredBaseModel):
     """Configuration of the forcing parameters of the model."""
 
     boundary: MultiFileDataset
@@ -99,17 +99,17 @@ class ForcingConfiguration(BaseModel):
     surface: MultiFileDataset
     """Surface forcing"""
 
-    corrections: MultiFileDataset | None = Field(None, validate_default=False)
+    corrections: MultiFileDataset | None = Field(default=None, validate_default=False)
     """Wind or other forcing corrections."""
 
-    tidal: SingleFileDataset | None = Field(None, validate_default=False)
+    tidal: SingleFileDataset | None = Field(default=None, validate_default=False)
     """Tidal forcing."""
 
-    river: SingleFileDataset | None = Field(None, validate_default=False)
+    river: SingleFileDataset | None = Field(default=None, validate_default=False)
     """River forcing."""
 
 
-class CodeRepository(BaseModel):
+class CodeRepository(DocLocMixin, ConfiguredBaseModel):
     """Reference to a remote code repository with optional path filtering
     and point-in-time specification.
     """
@@ -147,7 +147,7 @@ class CodeRepository(BaseModel):
         return self
 
 
-class ROMSCompositeCodeRepository(BaseModel):
+class ROMSCompositeCodeRepository(ConfiguredBaseModel):
     """Collection of repositories used to build, configure, and execute ROMS."""
 
     roms: CodeRepository
@@ -188,20 +188,16 @@ class Application(StrEnum):
     """A call to the hostname executable to simplify testing."""
 
 
-# class CommonFields(BaseModel):
 
 
-class ParameterSet(BaseModel):
-    documentation: str = Field(default="", validate_default=False)
-    """Description of input data provenance; used in provenance roll-up."""
+
+class ParameterSet(DocLocMixin, ConfiguredBaseModel):
+
 
     # TODO: 1. Consider an empty string default hash to avoid nulls
     # TODO: 2. Consider another model so the draft version doesn't have a hash.
     hash: str | None = Field(default=None, init=False, validate_default=False)
     """Hash used to verify the parameters are unchanged."""
-
-    locked: bool = Field(default=False, init=False, frozen=True)
-    """Mutability of the parameter set."""
 
     # NOTE: this doesn't support parameters without values (e.g. --no-truncate)
     # model_config: t.ClassVar[ConfigDict] = ConfigDict(extra="allow")
@@ -320,7 +316,7 @@ class ModelParameterSet(ParameterSet):
     time_step: PositiveInt
 
 
-class Blueprint(BaseModel):
+class Blueprint(ConfiguredBaseModel):
     name: RequiredString
     """A unique, user-friendly name for this blueprint."""
 
