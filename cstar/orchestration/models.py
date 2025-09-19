@@ -1,9 +1,8 @@
-import logging
 import typing as t
 from copy import deepcopy
 from datetime import datetime, timezone
 from enum import StrEnum, auto
-from pathlib import Path, PosixPath
+from pathlib import Path
 
 from pydantic import (
     BaseModel,
@@ -20,11 +19,6 @@ from pydantic import (
     model_validator,
 )
 from pytimeparse import parse
-
-from cstar.base.log import get_logger
-
-# todo no debug logging
-logger = get_logger(__name__, level=logging.DEBUG)
 
 RequiredString: t.TypeAlias = t.Annotated[
     str,
@@ -44,35 +38,39 @@ TargetDirectoryPath = t.Annotated[
 
 
 class ConfiguredBaseModel(BaseModel):
+    """BaseModel with configuration options that we want as default for other models."""
+
     model_config = ConfigDict(extra="forbid", from_attributes=True)
+    """Pydantic ConfigDict with options we want changed."""
+
 
 class HashableFile(ConfiguredBaseModel):
-    location: str
+    """Model representing a file that can be retrieved, with an optional hash check"""
+
+    location: FilePath | HttpUrl
+    """Location of the file to retrieve."""
     hash: str | None = Field(default=None, init=False, validate_default=False)
+    """Optional, expected hash of the file."""
 
 
 class DocLocMixin(ConfiguredBaseModel):
+    """Mixin model for documentation and locking fields that are used throughout the schema."""
+
     documentation: str = Field(default="", validate_default=False)
     """Description of input data provenance; used in provenance roll-up."""
 
     locked: bool = Field(default=False, init=False, frozen=True)
     """Mutability of the parameter set."""
 
+
 class SingleFileDataset(HashableFile, DocLocMixin):
-    pass
+    """A dataset that can be documented/locked that consists of a single file."""
 
 
 class MultiFileDataset(DocLocMixin, ConfiguredBaseModel):
+    """A dataset that can be documented/locked that consists of a multiple files."""
+
     files: list[HashableFile] = Field(default_factory=list)
-
-
-#
-# class PathDatasource(ConfiguredBaseModel):
-#     category: t.Literal["path"] = "path"
-#     """The datasource category used as a type discriminator."""
-#
-#     location: list[FilePath | DirectoryPath | HttpUrl]
-#     """The path to the file or directory containg data."""
 
 
 class PathFilter(ConfiguredBaseModel):
@@ -99,14 +97,14 @@ class ForcingConfiguration(ConfiguredBaseModel):
     surface: MultiFileDataset
     """Surface forcing"""
 
-    corrections: MultiFileDataset | None = Field(default=None, validate_default=False)
-    """Wind or other forcing corrections."""
-
     tidal: SingleFileDataset | None = Field(default=None, validate_default=False)
     """Tidal forcing."""
 
     river: SingleFileDataset | None = Field(default=None, validate_default=False)
     """River forcing."""
+
+    corrections: MultiFileDataset | None = Field(default=None, validate_default=False)
+    """Wind or other forcing corrections."""
 
 
 class CodeRepository(DocLocMixin, ConfiguredBaseModel):
@@ -128,6 +126,7 @@ class CodeRepository(DocLocMixin, ConfiguredBaseModel):
 
     @property
     def checkout_target(self) -> str:
+        """Return the commit if specified, else the branch"""
         return self.commit or self.branch
 
     @model_validator(mode="after")
@@ -167,6 +166,8 @@ class BlueprintState(StrEnum):
     """The allowed states for a work plan."""
 
     # TODO: determine if unique states for Bp/WP are being considered, if not. discard.
+    # SJE to Chris: I don't think we're planning custom user inputs here, just these two, or others
+    # that we would specifically add later.
     NotSet = auto()
     """Default, unset value."""
 
@@ -188,20 +189,11 @@ class Application(StrEnum):
     """A call to the hostname executable to simplify testing."""
 
 
-
-
-
 class ParameterSet(DocLocMixin, ConfiguredBaseModel):
-
-
     # TODO: 1. Consider an empty string default hash to avoid nulls
     # TODO: 2. Consider another model so the draft version doesn't have a hash.
     hash: str | None = Field(default=None, init=False, validate_default=False)
     """Hash used to verify the parameters are unchanged."""
-
-    # NOTE: this doesn't support parameters without values (e.g. --no-truncate)
-    # model_config: t.ClassVar[ConfigDict] = ConfigDict(extra="allow")
-    # """Enable the model to parse user-defined attributes."""
 
     @model_validator(mode="after")
     def _model_validator(self) -> "ParameterSet":
@@ -212,24 +204,6 @@ class ParameterSet(DocLocMixin, ConfiguredBaseModel):
         if self.locked and not self.hash:
             msg = "A locked parameter set must include a hash"
             raise ValueError(msg)
-        # if self.model_extra:
-        #     for k, v in self.model_extra.items():
-        #         stripped = k.strip()
-        #
-        #         logger.debug(f"Handling user-specified extra param {k} with value {v}")
-        #
-        #         if " " in stripped or not stripped:
-        #             msg = f"Parameter name `{k}` cannot include whitespace"
-        #             raise ValueError(msg)
-        #         if not v.strip():
-        #             msg = f"Parameter `{k}` does not have a value"
-        #             raise ValueError(msg)
-        #
-        #         # re-write dynamic property keys without leading or trailing whitespace
-        #         if " " in k:
-        #             # TODO: go see if this actually works in a test or if delattr is required
-        #             self.model_extra.pop(k)
-        #             self.model_extra.update({stripped: v})
 
         return self
 
@@ -237,7 +211,8 @@ class ParameterSet(DocLocMixin, ConfiguredBaseModel):
 class RuntimeParameterSet(ParameterSet):
     """Parameters for the execution of the model.
 
-    Supports user-defined attributes to enable customization.
+    These parameters can be varied (within bounds defined elsewhere in the blueprint, e.g. valid_start/end_date),
+    without changing the validity of the model solution.
     """
 
     start_date: datetime = datetime(1, 1, 1, tzinfo=timezone.utc)
@@ -298,22 +273,20 @@ class RuntimeParameterSet(ParameterSet):
 
 
 class PartitioningParameterSet(ParameterSet):
-    """Parameters for the partitioning of the model.
+    """Parameters for the partitioning of the model."""
 
-    Supports user-defined attributes to enable customization.
-    """
-
-    # todo: adding defaults to consume a 128 core node. consider removing.
-    n_procs_x: PositiveInt = 16
+    n_procs_x: PositiveInt
     """Number of processes used to subdivide the domain on the x-axis."""
 
-    # todo: adding defaults to consume a 128 core node. consider removing.
-    n_procs_y: PositiveInt = 8
+    n_procs_y: PositiveInt
     """Number of processes used to subdivide the domain on the y-axis."""
 
 
 class ModelParameterSet(ParameterSet):
+    """Parameters that can override ROMS values, but that affect that overall solution validity."""
+
     time_step: PositiveInt
+    """The time step the model integrates over."""
 
 
 class Blueprint(ConfiguredBaseModel):
@@ -339,8 +312,10 @@ class Blueprint(ConfiguredBaseModel):
     """Code repositories used to build, configure, and execute the ROMS simulation."""
 
     initial_conditions: SingleFileDataset
+    """File containing the starting conditions of the simulation."""
 
     grid: SingleFileDataset
+    """File defining the grid geometry."""
 
     forcing: ForcingConfiguration
     """Forcing configuration."""
@@ -351,11 +326,8 @@ class Blueprint(ConfiguredBaseModel):
     model_params: ModelParameterSet
     """User-defined model parameters."""
 
-    # should this be nullable instead of a union with a default?
-    runtime_params: RuntimeParameterSet = RuntimeParameterSet()
+    runtime_params: RuntimeParameterSet
     """User-defined runtime parameters."""
-
-    model_config = ConfigDict(extra="forbid")
 
     @model_validator(mode="after")
     def _model_validator(self) -> "Blueprint":

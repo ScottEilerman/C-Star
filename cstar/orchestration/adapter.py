@@ -47,9 +47,6 @@ class ModelAdapter(t.Generic[_Tin, _Tout_co], t.Protocol):
 class DiscretizationAdapter(ModelAdapter[models.Blueprint, ROMSDiscretization]):
     """Create a ROMSDiscretization from a blueprint model."""
 
-    # def __init__(self, model: models.Blueprint) -> None:
-    #     self.model = model
-
     @t.override
     def adapt(self) -> ROMSDiscretization:
         return ROMSDiscretization(
@@ -134,13 +131,8 @@ class InitialConditionAdapter(ModelAdapter[models.Blueprint, ROMSInitialConditio
 class TidalForcingAdapter(ModelAdapter[models.Blueprint, ROMSTidalForcing]):
     """Create a ROMSTidalForcing from a blueprint model."""
 
-    # def __init__(self, model: models.Blueprint, key: str) -> None:
-    #     super().__init__(model)
-    #     self.key = key
-
     @t.override
     def adapt(self) -> ROMSTidalForcing | None:
-        # code_attr: models.Forcing = getattr(self.model.code, self.key)
         if self.model.forcing.tidal is None:
             return None
         return ROMSTidalForcing(
@@ -154,13 +146,8 @@ class TidalForcingAdapter(ModelAdapter[models.Blueprint, ROMSTidalForcing]):
 class RiverForcingAdapter(ModelAdapter[models.Blueprint, ROMSRiverForcing]):
     """Create a ROMSRiverForcing from a blueprint model."""
 
-    # def __init__(self, model: models.Blueprint, key: str) -> None:
-    #     super().__init__(model)
-    #     self.key = key
-
     @t.override
     def adapt(self) -> ROMSRiverForcing | None:
-        # code_attr: models.Forcing = getattr(self.model.code, self.key)
         if self.model.forcing.river is None:
             return None
 
@@ -175,14 +162,8 @@ class RiverForcingAdapter(ModelAdapter[models.Blueprint, ROMSRiverForcing]):
 class BoundaryForcingAdapter(ModelAdapter[models.Blueprint, list[ROMSBoundaryForcing]]):
     """Create a ROMSBoundaryForcing from a blueprint model."""
 
-    # def __init__(self, model: models.Blueprint, key: str) -> None:
-    #     super().__init__(model)
-    #     self.key = key
-
     @t.override
     def adapt(self) -> list[ROMSBoundaryForcing]:
-        # code_attr: models.Forcing = getattr(self.model.code, self.key)
-
         return [
             ROMSBoundaryForcing(
                 location=f.location,
@@ -197,14 +178,8 @@ class BoundaryForcingAdapter(ModelAdapter[models.Blueprint, list[ROMSBoundaryFor
 class SurfaceForcingAdapter(ModelAdapter[models.Blueprint, list[ROMSSurfaceForcing]]):
     """Create a ROMSSurfaceForcing from a blueprint model."""
 
-    # def __init__(self, model: models.Blueprint, key: str) -> None:
-    #     super().__init__(model)
-    #     self.key = key
-
     @t.override
     def adapt(self) -> list[ROMSSurfaceForcing]:
-        # code_attr: models.Forcing = getattr(self.model.code, self.key)
-
         return [
             ROMSSurfaceForcing(
                 location=f.location,
@@ -221,7 +196,6 @@ class ForcingCorrectionAdapter(
 ):
     @t.override
     def adapt(self) -> list[ROMSForcingCorrections] | None:
-        # code_attr: models.Forcing = getattr(self.model.code, self.key)
         if self.model.forcing.corrections is None:
             return None
         return [
@@ -237,9 +211,6 @@ class ForcingCorrectionAdapter(
 
 class BlueprintAdapter(ModelAdapter[models.Blueprint, ROMSSimulation]):
     """Create a ROMSSimulation from a blueprint model."""
-
-    def __init__(self, model: models.Blueprint) -> None:
-        self.model = model
 
     @t.override
     def adapt(self) -> ROMSSimulation:

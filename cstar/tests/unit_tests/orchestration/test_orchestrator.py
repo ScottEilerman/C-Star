@@ -12,14 +12,16 @@ from cstar.orchestration.models import (
     BlueprintState,
     CodeRepository,
     ForcingConfiguration,
-    ParameterSet,
+    HashableFile,
+    ModelParameterSet,
+    MultiFileDataset,
     PartitioningParameterSet,
     ROMSCompositeCodeRepository,
     RuntimeParameterSet,
-    Workplan, SingleDataFile,
+    SingleFileDataset,
+    Workplan,
 )
 from cstar.orchestration.orchestrator import GraphPlanner, SerialPlanner
-from orchestration.models import SingleFileDataset, MultiFileDataset, ModelParameterSet
 
 
 @pytest.fixture
@@ -81,6 +83,8 @@ def test_make_a_minimum_blueprint_yaml(
 ) -> None:
     """Use a unit test to create a blueprint YAML doc instead of doing so by hand..."""
     bp_path = tmp_path / "blueprint.yml"
+    random_file = tmp_path / "random_file.nc"
+    random_file.touch()
 
     blueprint = Blueprint(
         name="Test Blueprint Name",
@@ -105,13 +109,13 @@ def test_make_a_minimum_blueprint_yaml(
             marbl=None,
         ),
         forcing=ForcingConfiguration(
-            boundary=MultiFileDataset(files=[SingleDataFile(location=random_file)]),
-            surface=MultiFileDataset(files=[SingleDataFile(location=random_file)]),
-            corrections=MultiFileDataset(files=[SingleDataFile(location=random_file)]),
+            boundary=MultiFileDataset(files=[HashableFile(location=random_file)]),
+            surface=MultiFileDataset(files=[HashableFile(location=random_file)]),
+            corrections=MultiFileDataset(files=[HashableFile(location=random_file)]),
             tidal=SingleFileDataset(location=random_file),
             river=SingleFileDataset(location=random_file),
         ),
-        partitioning=PartitioningParameterSet(),
+        partitioning=PartitioningParameterSet(n_procs_x=1, n_procs_y=2),
         model_params=ModelParameterSet(time_step=1),
         runtime_params=RuntimeParameterSet(),
         grid=SingleFileDataset(location=random_file),
