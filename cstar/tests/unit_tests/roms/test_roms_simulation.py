@@ -18,6 +18,7 @@ from cstar.roms.discretization import ROMSDiscretization
 from cstar.roms.external_codebase import ROMSExternalCodeBase
 from cstar.roms.input_dataset import (
     ROMSBoundaryForcing,
+    ROMSCdrForcing,
     ROMSForcingCorrections,
     ROMSInitialConditions,
     ROMSInputDataset,
@@ -124,6 +125,10 @@ class TestROMSSimulationInitialization:
         assert isinstance(sim.tidal_forcing, ROMSTidalForcing)
         assert sim.tidal_forcing.source.location == "http://my.files/tidal.nc"
         assert sim.tidal_forcing.source.file_hash == "345"
+
+        assert isinstance(sim.cdr_forcing, ROMSCdrForcing)
+        assert sim.cdr_forcing.source.location == "http://my.files/cdr.nc"
+        assert sim.cdr_forcing.source.file_hash == "542"
 
         assert isinstance(sim.boundary_forcing, list)
         assert [isinstance(x, ROMSBoundaryForcing) for x in sim.boundary_forcing]
@@ -1000,6 +1005,10 @@ class TestToAndFromDictAndBlueprint:
                 "location": "http://my.files/river.nc",
                 "file_hash": "543",
             },
+            "cdr_forcing": {
+                "location": "http://my.files/cdr.nc",
+                "file_hash": "542",
+            },
             "surface_forcing": [
                 {"location": "http://my.files/surface.nc", "file_hash": "567"}
             ],
@@ -1790,7 +1799,9 @@ class TestProcessingAndExecution:
         mock_subprocess.return_value = MagicMock(returncode=1, stderr="")
         mock_get_hash.return_value = "mockhash123"
 
-        with pytest.raises(RuntimeError, match="Error when compiling ROMS"):
+        with pytest.raises(
+            RuntimeError, match="Error when cleaning existing ROMS compilation."
+        ):
             sim.build()
         assert mock_subprocess.call_count == 1
         mock_subprocess.assert_any_call(

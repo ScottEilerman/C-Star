@@ -24,6 +24,7 @@ from cstar.roms.discretization import ROMSDiscretization
 from cstar.roms.external_codebase import ROMSExternalCodeBase
 from cstar.roms.input_dataset import (
     ROMSBoundaryForcing,
+    ROMSCdrForcing,
     ROMSForcingCorrections,
     ROMSInitialConditions,
     ROMSInputDataset,
@@ -135,6 +136,7 @@ class ROMSSimulation(Simulation):
         initial_conditions: Optional["ROMSInitialConditions"] = None,
         tidal_forcing: Optional["ROMSTidalForcing"] = None,
         river_forcing: Optional["ROMSRiverForcing"] = None,
+        cdr_forcing: Optional["ROMSCdrForcing"] = None,
         boundary_forcing: list["ROMSBoundaryForcing"] | None = None,
         surface_forcing: list["ROMSSurfaceForcing"] | None = None,
         forcing_corrections: list["ROMSForcingCorrections"] | None = None,
@@ -227,6 +229,7 @@ class ROMSSimulation(Simulation):
         self.initial_conditions = initial_conditions
         self.tidal_forcing = tidal_forcing
         self.river_forcing = river_forcing
+        self.cdr_forcing = cdr_forcing
         self.surface_forcing = [] if surface_forcing is None else surface_forcing
         self._check_forcing_collection_types(self.surface_forcing, ROMSSurfaceForcing)
 
@@ -795,6 +798,11 @@ class ROMSSimulation(Simulation):
                 **river_forcing_kwargs
             )
 
+        # Construct any ROMSCdrForcing instance:
+        cdr_forcing_kwargs = simulation_dict.get("cdr_forcing")
+        if cdr_forcing_kwargs is not None:
+            simulation_kwargs["cdr_forcing"] = ROMSCdrForcing(**cdr_forcing_kwargs)
+
         # Construct any ROMSBoundaryForcing instances:
         boundary_forcing_entries = simulation_dict.get("boundary_forcing", [])
         if len(boundary_forcing_entries) > 0:
@@ -948,7 +956,7 @@ class ROMSSimulation(Simulation):
             bp_dict, directory=directory, start_date=start_date, end_date=end_date
         )
 
-    def to_blueprint(self, filename: str) -> None:
+    def to_blueprint(self, filename: str | Path) -> None:
         """Save the `ROMSSimulation` instance as a YAML blueprint.
 
         This method converts the simulation instance into a dictionary representation
@@ -956,7 +964,7 @@ class ROMSSimulation(Simulation):
 
         Parameters
         ----------
-        filename : str
+        filename : str or Path
             The name of the YAML file where the blueprint will be saved.
 
         Raises
@@ -1227,7 +1235,7 @@ class ROMSSimulation(Simulation):
             _run_cmd(
                 "make compile_clean",
                 cwd=build_dir,
-                msg_err="Error when compiling ROMS.",
+                msg_err="Error when cleaning existing ROMS compilation.",
                 raise_on_error=True,
             )
 
@@ -1571,8 +1579,8 @@ class ROMSSimulation(Simulation):
 
         # Reset cached data for input datasets
         for inp in new_sim.input_datasets:
-            inp._local_file_hash_cache = None
-            inp._local_file_stat_cache = None
+            inp._local_file_hash_cache.clear()
+            inp._local_file_stat_cache.clear()
             inp.working_path = None
 
         return new_sim

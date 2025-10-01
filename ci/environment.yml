@@ -11,6 +11,7 @@ dependencies:
   - xarray
   - netCDF4
   - pydantic>=2.11
+  - pytimeparse>=1.1.8
   # tests
   - pytest
   - pip
@@ -18,6 +19,7 @@ dependencies:
   - pre-commit==3.8.0
   - coverage
   - pytest
+  - pytest-asyncio
   # docs
   - sphinx
   - nbsphinx
