@@ -10,14 +10,13 @@ import sys
 from datetime import datetime, timezone
 from typing import Final, override
 
-from cstar.orchestration.adapter import BlueprintAdapter
-from cstar.orchestration.models import RomsMarblBlueprint
-from cstar.orchestration.serialization import deserialize
-
 from cstar.base.exceptions import BlueprintError, CstarError
 from cstar.base.log import get_logger
 from cstar.entrypoint.service import Service, ServiceConfiguration
 from cstar.execution.handler import ExecutionHandler, ExecutionStatus
+from cstar.orchestration.adapter import BlueprintAdapter
+from cstar.orchestration.models import RomsMarblBlueprint
+from cstar.orchestration.serialization import deserialize
 from cstar.roms import ROMSSimulation
 from cstar.system.manager import cstar_sysmgr
 
@@ -534,12 +533,12 @@ async def main(raw_args: list[str]) -> int:
         blueprint_req = get_request(args)
         job_cfg = JobConfig()  # use default HPC config
 
-    log_file = (
-        blueprint_req.output_dir
-        / LOGS_DIRECTORY
-        / WORKER_LOG_FILE_TPL.format(datetime.now(timezone.utc))
-    )
-    log = get_logger(__name__, level=service_cfg.log_level, filename=log_file)
+    # log_file = (
+    #     blueprint_req.output_dir
+    #     / LOGS_DIRECTORY
+    #     / WORKER_LOG_FILE_TPL.format(datetime.now(timezone.utc))
+    # )
+    log = get_logger(__name__, level=service_cfg.log_level)  # , filename=log_file)
 
     try:
         configure_environment(log)
