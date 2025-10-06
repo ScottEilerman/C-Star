@@ -10,9 +10,9 @@ import sys
 from datetime import datetime, timezone
 from typing import Final, override
 
-from orchestration.adapter import BlueprintAdapter
-from orchestration.models import RomsMarblBlueprint
-from orchestration.serialization import deserialize
+from cstar.orchestration.adapter import BlueprintAdapter
+from cstar.orchestration.models import RomsMarblBlueprint
+from cstar.orchestration.serialization import deserialize
 
 from cstar.base.exceptions import BlueprintError, CstarError
 from cstar.base.log import get_logger
