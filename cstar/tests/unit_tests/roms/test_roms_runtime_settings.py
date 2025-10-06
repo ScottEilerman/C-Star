@@ -473,9 +473,13 @@ class TestROMSRuntimeSettings:
         with pytest.raises(FileNotFoundError, match="does not exist"):
             ROMSRuntimeSettings._load_raw_sections(Path("not_a_file.in"))
 
+<<<<<<< HEAD
     def test_to_file(
         self, fake_romsruntimesettings: ROMSRuntimeSettings, tmp_path: Path
     ) -> None:
+=======
+    def test_to_file(self, fake_romsruntimesettings, tmp_path):
+>>>>>>> CWorthy-ocean/main
         """Test the ROMSRuntimeSettings.to_file method.
 
         This test writes the example ROMSRuntimeSettings instance
@@ -495,8 +499,13 @@ class TestROMSRuntimeSettings:
         -------
         - The lines in the written file match those in the reference file
         """
+<<<<<<< HEAD
         fake_romsruntimesettings.to_file(
             Path(__file__).parent / "fixtures/fake_romsruntimesettings.in"
+=======
+        fake_romsruntimesettings.from_file(
+            Path(__file__).parent / "fixtures/example_runtime_settings.in"
+>>>>>>> CWorthy-ocean/main
         )
         fake_romsruntimesettings.to_file(tmp_path / "test.in")
 
@@ -520,11 +529,19 @@ class TestROMSRuntimeSettings:
             lns = f.readlines()
         assert all(["climatology" not in s for s in lns])
 
+<<<<<<< HEAD
     def test_from_file(self, fake_romsruntimesettings: ROMSRuntimeSettings) -> None:
         """Test the ROMSRuntimeSettings.from_file method.
 
         This test compares the ROMSRuntimeSettings instance created from
         the reference file `fixtures/fake_romsruntimesettings.in` with the
+=======
+    def test_from_file(self, fake_romsruntimesettings):
+        """Test the ROMSRuntimeSettings.from_file method.
+
+        This test compares the ROMSRuntimeSettings instance created from
+        the reference file `fixtures/example_runtime_settings.in` with the
+>>>>>>> CWorthy-ocean/main
         example instance returned by the `fake_romsruntimesettings` fixture.
 
         Mocks and Fixtures
@@ -606,9 +623,13 @@ class TestROMSRuntimeSettings:
         with pytest.raises(ValueError, match="Required field missing from file."):
             ROMSRuntimeSettings.from_file(modified_file)
 
+<<<<<<< HEAD
     def test_file_roundtrip(
         self, fake_romsruntimesettings: ROMSRuntimeSettings, tmp_path: Path
     ) -> None:
+=======
+    def test_file_roundtrip(self, fake_romsruntimesettings, tmp_path):
+>>>>>>> CWorthy-ocean/main
         """Tests that the `to_file`/`from_file` roundtrip results in a functionally
         indentical ROMSRuntimeSettings instance.
 
@@ -660,7 +681,11 @@ class TestStrAndRepr:
     behave as expected.
     """
 
+<<<<<<< HEAD
     def test_str(self, fake_romsruntimesettings: ROMSRuntimeSettings) -> None:
+=======
+    def test_str(self, fake_romsruntimesettings):
+>>>>>>> CWorthy-ocean/main
         """Test that the __str__ function of ROMSRuntimeSettings matches an expected
         string for the example instance.
 
@@ -723,10 +748,17 @@ Maximum sponge layer viscosity (`ROMSRuntimeSettings.v_sponge`, m2/s) = 0.0
 Climatology data files (`ROMSRuntimeSettings.climatology`): climfile2.nc"""
 
         assert str(fake_romsruntimesettings) == expected_str, (
+<<<<<<< HEAD
             f"expected \n{expected_str}\n, got\n{fake_romsruntimesettings!s}"
         )
 
     def test_repr(self, fake_romsruntimesettings: ROMSRuntimeSettings) -> None:
+=======
+            f"expected \n{expected_str}\n, got\n{str(fake_romsruntimesettings)}"
+        )
+
+    def test_repr(self, fake_romsruntimesettings):
+>>>>>>> CWorthy-ocean/main
         """Test that the __repr__ function of ROMSRuntimeSettings matches an expected
         string for the example instance.
 
@@ -740,7 +772,12 @@ Climatology data files (`ROMSRuntimeSettings.climatology`): climfile2.nc"""
         - repr(fake_romsruntimesettings) matches an expected reference string
         """
         expected_repr = """ROMSRuntimeSettings(title='Example runtime settings', time_stepping={'ntimes': 360, 'dt': 60, 'ndtfast': 60, 'ninfo': 1}, bottom_drag={'rdrg': 0.0, 'rdrg2': 0.001, 'zob': 0.01}, initial={'nrrec': 1, 'ininame': PosixPath('input_datasets/roms_ini.nc')}, forcing=["('filenames', [PosixPath('input_datasets/roms_frc.nc'), PosixPath('input_datasets/roms_frc_bgc.nc'), PosixPath('input_datasets/roms_bry.nc'), PosixPath('input_datasets/roms_bry_bgc.nc')])"], output_root_name='ROMS_test', grid='input_datasets/roms_grd.nc', climatology='climfile2.nc', s_coord={'theta_s': 5.0, 'theta_b': 2.0, 'tcline': 300.0}, rho0=1000.0, lin_rho_eos={'Tcoef': 0.2, 'T0': 1.0, 'Scoef': 0.822, 'S0': 1.0}, marbl_biogeochemistry={'marbl_namelist_fname': PosixPath('marbl_in'), 'marbl_tracer_list_fname': PosixPath('marbl_tracer_list_fname'), 'marbl_diag_list_fname': PosixPath('marbl_diagnostic_output_list')}, lateral_visc=0.0, gamma2=1.0, tracer_diff2=[0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0], vertical_mixing={'Akv_bak': 0.0, 'Akt_bak': [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]}, my_bak_mixing={'Akq_bak': 1e-05, 'q2nu2': 0.0, 'q2nu4': 0.0}, sss_correction=7.777, sst_correction=10.0, ubind=0.1, v_sponge=0.0)"""
+<<<<<<< HEAD
 
         assert expected_repr == repr(fake_romsruntimesettings), (
             f"expected \n{expected_repr}\n, got\n{fake_romsruntimesettings!r}"
+=======
+        assert expected_repr == repr(fake_romsruntimesettings), (
+            f"expected \n{expected_repr}\n, got\n{repr(fake_romsruntimesettings)}"
+>>>>>>> CWorthy-ocean/main
         )

@@ -1,5 +1,6 @@
 import functools
 import logging
+<<<<<<< HEAD
 from collections.abc import Callable, Generator
 from pathlib import Path
 from unittest import mock
@@ -31,6 +32,24 @@ from cstar.tests.unit_tests.fake_abc_subclasses import (
     FakeExternalCodeBase,
     FakeInputDataset,
     FakeROMSInputDataset,
+=======
+import pathlib
+from collections.abc import Generator
+from pathlib import Path
+from unittest import mock
+
+import numpy as np
+import pytest
+
+from cstar.base import AdditionalCode, Discretization, ExternalCodeBase, InputDataset
+from cstar.base.datasource import DataSource
+from cstar.base.log import get_logger
+from cstar.marbl import MARBLExternalCodeBase
+from cstar.roms.runtime_settings import ROMSRuntimeSettings
+from cstar.tests.unit_tests.fake_abc_subclasses import (
+    FakeExternalCodeBase,
+    FakeInputDataset,
+>>>>>>> CWorthy-ocean/main
     StubSimulation,
 )
 
@@ -40,7 +59,11 @@ from cstar.tests.unit_tests.fake_abc_subclasses import (
 
 
 @pytest.fixture
+<<<<<<< HEAD
 def fake_additionalcode_remote():
+=======
+def fake_additionalcode_remote() -> AdditionalCode:
+>>>>>>> CWorthy-ocean/main
     """Pytest fixture that provides an instance of the AdditionalCode class representing
     a remote repository.
 
@@ -69,7 +92,11 @@ def fake_additionalcode_remote():
 
 
 @pytest.fixture
+<<<<<<< HEAD
 def fake_additionalcode_local():
+=======
+def fake_additionalcode_local() -> AdditionalCode:
+>>>>>>> CWorthy-ocean/main
     """Pytest fixture that provides an instance of the AdditionalCode class representing
     code located on the local filesystem.
 
@@ -98,8 +125,17 @@ def fake_additionalcode_local():
 ################################################################################
 # ExternalCodeBase
 ################################################################################
+<<<<<<< HEAD
 @pytest.fixture
 def fake_externalcodebase(log: logging.Logger):
+=======
+
+
+@pytest.fixture
+def fake_externalcodebase(
+    log: logging.Logger,
+) -> Generator[ExternalCodeBase, None, None]:
+>>>>>>> CWorthy-ocean/main
     """Yields a fake codebase (instance of FakeExternalCodeBase) for
     use in testing.
     """
@@ -111,6 +147,24 @@ def fake_externalcodebase(log: logging.Logger):
         yield FakeExternalCodeBase()
 
 
+<<<<<<< HEAD
+=======
+@pytest.fixture
+def fake_marblexternalcodebase(
+    log: logging.Logger,
+) -> Generator[MARBLExternalCodeBase, None, None]:
+    """Fixture providing a `MARBLExternalCodeBase` instance for testing."""
+    # Correctly patch the imported _get_hash_from_checkout_target in the ExternalCodeBase's module
+    with mock.patch(
+        "cstar.base.external_codebase._get_hash_from_checkout_target",
+        return_value="test123",
+    ):
+        yield MARBLExternalCodeBase(
+            source_repo="https://marbl.com/repo.git", checkout_target="v1"
+        )
+
+
+>>>>>>> CWorthy-ocean/main
 ################################################################################
 # ROMSRuntimeSettings
 ################################################################################
@@ -179,7 +233,11 @@ def fake_romsruntimesettings():
 
 
 @pytest.fixture
+<<<<<<< HEAD
 def fake_inputdataset_local():
+=======
+def fake_inputdataset_local() -> Generator[InputDataset, None, None]:
+>>>>>>> CWorthy-ocean/main
     """Fixture to provide a mock local InputDataset instance.
 
     This fixture patches properties of the DataSource class to simulate a local dataset,
@@ -220,7 +278,11 @@ def fake_inputdataset_local():
 
 
 @pytest.fixture
+<<<<<<< HEAD
 def fake_inputdataset_remote():
+=======
+def fake_inputdataset_remote() -> Generator[InputDataset, None, None]:
+>>>>>>> CWorthy-ocean/main
     """Fixture to provide a mock remote InputDataset instance.
 
     This fixture patches properties of the DataSource class to simulate a remote dataset,
@@ -266,6 +328,7 @@ def fake_inputdataset_remote():
 
 
 ################################################################################
+<<<<<<< HEAD
 # ROMSInputDataset
 ################################################################################
 
@@ -381,12 +444,18 @@ def fake_romsinputdataset_yaml_remote():
 
 
 ################################################################################
+=======
+>>>>>>> CWorthy-ocean/main
 # Simulation
 ################################################################################
 
 
 @pytest.fixture
+<<<<<<< HEAD
 def stub_simulation(tmp_path):
+=======
+def stub_simulation(fake_externalcodebase, tmp_path) -> StubSimulation:
+>>>>>>> CWorthy-ocean/main
     """Fixture providing a `StubSimulation` instance for testing.
 
     This fixture sets up a minimal `StubSimulation` instance with a mock external
@@ -421,12 +490,17 @@ def stub_simulation(tmp_path):
         valid_start_date="2024-01-01",
         valid_end_date="2026-01-01",
     )
+<<<<<<< HEAD
     yield sim
+=======
+    return sim
+>>>>>>> CWorthy-ocean/main
 
 
 ################################################################################
 # ROMSSimulation
 ################################################################################
+<<<<<<< HEAD
 
 
 @pytest.fixture
@@ -511,6 +585,8 @@ def fake_romssimulation(
 
 
 ################################################################################
+=======
+>>>>>>> CWorthy-ocean/main
 
 
 @pytest.fixture
