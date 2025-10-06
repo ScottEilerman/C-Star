@@ -10,6 +10,10 @@ import sys
 from datetime import datetime, timezone
 from typing import Final, override
 
+from orchestration.adapter import BlueprintAdapter
+from orchestration.models import RomsMarblBlueprint
+from orchestration.serialization import deserialize
+
 from cstar.base.exceptions import BlueprintError, CstarError
 from cstar.base.log import get_logger
 from cstar.entrypoint.service import Service, ServiceConfiguration
@@ -116,14 +120,11 @@ class SimulationRunner(Service):
         super().__init__(service_cfg)
 
         self._blueprint_uri = request.blueprint_uri
-        self._output_root = request.output_dir.expanduser()
+
+        bp = deserialize(pathlib.Path(self._blueprint_uri), RomsMarblBlueprint)
+        self._output_root = bp.runtime_params.output_dir.expanduser()
         self._output_dir = self._get_unique_path(self._output_root)
-        self._simulation: ROMSSimulation = ROMSSimulation.from_blueprint(
-            blueprint=self._blueprint_uri,
-            directory=self._output_dir,
-            start_date=request.start_date,
-            end_date=request.end_date,
-        )
+        self._simulation: ROMSSimulation = BlueprintAdapter(bp).adapt()
         self._stages = tuple(request.stages)
 
         roms_root = os.environ.get("ROMS_ROOT", None)
