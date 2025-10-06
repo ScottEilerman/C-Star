@@ -165,7 +165,7 @@ class SimulationRunner(Service):
             None,
         )
 
-        if self._output_root.exists() and outputs:
+        if self._output_dir.exists() and outputs:
             msg = f"Output directory {self._output_root} is not empty."
             raise ValueError(msg)
 
