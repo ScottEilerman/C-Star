@@ -13,7 +13,7 @@ from prefect.context import TaskRunContext
 from cstar.execution.handler import ExecutionStatus
 from cstar.execution.scheduler_job import create_scheduler_job, get_status_of_slurm_job
 from cstar.orchestration.launch.slurm import SlurmLauncher
-from cstar.orchestration.models import RomsMarblBlueprint, Step
+from cstar.orchestration.models import RomsMarblBlueprint, Step, Workplan
 from cstar.orchestration.orchestration import (
     CStep,
     CWorkplan,
@@ -133,17 +133,17 @@ async def build_and_run_dag(path: Path) -> None:
     path : Path
         The path to the blueprint to execute
     """
-    # wp = deserialize(path, Workplan)
-    wp = CWorkplan(
-        name="demo-wp",
-        steps=[
-            CStep(name="s-00", depends_on=[]),
-            CStep(name="s-01", depends_on=["s-00"]),
-            CStep(name="s-02", depends_on=["s-00"]),
-            CStep(name="s-03", depends_on=["s-01", "s-02"]),
-            CStep(name="s-04", depends_on=["s-03"]),
-        ],
-    )
+    wp = deserialize(path, Workplan)
+    # wp = CWorkplan(
+    #     name="demo-wp",
+    #     steps=[
+    #         CStep(name="s-00", depends_on=[]),
+    #         CStep(name="s-01", depends_on=["s-00"]),
+    #         CStep(name="s-02", depends_on=["s-00"]),
+    #         CStep(name="s-03", depends_on=["s-01", "s-02"]),
+    #         CStep(name="s-04", depends_on=["s-03"]),
+    #     ],
+    # )
     planner = Planner(workplan=wp)
     # launcher: Launcher = LocalLauncher()
     launcher: Launcher = SlurmLauncher()
