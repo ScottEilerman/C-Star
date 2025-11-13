@@ -164,6 +164,11 @@ class ROMSInputDataset(InputDataset, ABC):
         # Helper functions
         def validate_partitioning_request() -> bool:
             """Helper function to skip, raise, or proceed with partitioning request."""
+            print(self.partitioning)
+            print(overwrite_existing_files)
+            print(self.partitioning.np_xi)
+            print(self.partitioning.np_eta)
+            print(self.exists_locally)
             if (self.partitioning is not None) and (not overwrite_existing_files):
                 if (self.partitioning.np_xi == np_xi) and (
                     self.partitioning.np_eta == np_eta
