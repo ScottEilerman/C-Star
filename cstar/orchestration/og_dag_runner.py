@@ -17,7 +17,7 @@ from cstar.execution.handler import ExecutionStatus
 from cstar.execution.scheduler_job import create_scheduler_job, get_status_of_slurm_job
 from cstar.orchestration.launch.slurm import SlurmLauncher
 from cstar.orchestration.models import RomsMarblBlueprint, Step, Workplan
-from cstar.orchestration.orchestration import ProcessHandle, Launcher
+from cstar.orchestration.orchestration import ProcessHandle, Launcher, Status
 from cstar.orchestration.serialization import deserialize
 
 # JobId = str
@@ -44,7 +44,7 @@ from cstar.orchestration.serialization import deserialize
 
 def cache_func(context: TaskRunContext, params):
     """Cache on a combination of the task name and user-assigned run id"""
-    cache_key = f"{os.getenv('CSTAR_RUNID')}_{params['step'].name}_{context.task.name}"
+    cache_key = f"{os.getenv('CSTAR_RUNID')}_{params['self'].step.name}_{context.task.name}"
     print(f"Cache check: {cache_key}")
     return cache_key
 
@@ -131,17 +131,34 @@ class WorkTask:
     def __init__(self, step: Step, launcher: Launcher):
         self.step = step
         self.name = step.name
-        self.handle: ProcessHandle | None = None
+        self._handle = None
         self.launcher = launcher
         self.depends_on: list[WorkTask] = []
 
-    @task(persist_result=True, cache_key_fn=cache_func)
-    def launch(self):
-        self.handle = self.launcher.launch(self.step, dependencies=[dep.handle for dep in self.depends_on])
+    @property
+    def handle(self) -> ProcessHandle:
+        if self._handle is None:
+            print(f"no handle exists for {self.name}, submitting job to establish future")
+            self._handle = self.launch()
+        return self._handle
 
-    @task(persist_result=True, cache_key_fn=cache_func)
+    @task(persist_result=True, cache_key_fn=cache_func, task_run_name="launch-{self.name}")
+    def launch(self):
+        handle = self.launcher.launch(
+            self.step, dependencies=[dep.handle for dep in self.depends_on]
+        )
+        if self._handle is None:
+            self._handle = handle
+        return handle
+
+    @task(persist_result=True, cache_key_fn=cache_func, task_run_name="check-{self.name}")
     def check(self):
-        self.launcher.query_status(self.step, self.handle)
+        while True:
+            status = self.launcher.query_status(self.step, self.handle)
+            print(f"status of {self.name} is {status}")
+            if Status.is_terminal(status):
+                return status
+            sleep(15)
 
 @flow
 def build_and_run(workplan: Workplan):
@@ -149,23 +166,29 @@ def build_and_run(workplan: Workplan):
     launcher = SlurmLauncher()
     # create all tasks first
     for step in workplan.steps:
+        print(f"Making task for {step.name}")
         tasks[step.name] = WorkTask(step, launcher)
     # map step dependencies as task dependencies
     for name, t in tasks.items():
         t.depends_on = [tasks[n] for n in t.step.depends_on]
+        print(f"name: {name}, deps: {t.depends_on}")
 
     submissions = {}
     checks = {}
     # submit everything for execution with dependencies
     for t in tasks.values():
-        submissions = {t.name: t.launch.submit(wait_for=t.depends_on)}
+        print(f"launching {t.name}")
+        submissions[t.name] = t.launch.submit() #wait_for= [dep.handle for dep in t.depends_on]
 
     # create check tasks for every task, depending on their real dependencies and their
     # own launch task
     for t in tasks.values():
-        checks = {t.name: t.check.submit(wait_for = t.depends_on + [submissions[t.name]]) for t in t.step.depends_on}
+        print(f"checking {t.name} with handle {t.handle}")
+
+        checks[t.name] = t.check.submit(wait_for = [submissions[t.name]]) #wait_for = [dep.handle for dep in t.depends_on] + [t.handle]
 
     all_tasks = [*submissions.values(), *checks.values()]
+    print(all_tasks)
     wait(all_tasks)
 
 if __name__ == "__main__":
@@ -181,9 +204,10 @@ if __name__ == "__main__":
     os.environ["CSTAR_RUNID"] = my_run_name
 
     workplan = deserialize(Path(wp_path), Workplan)
-    for bp in [s.blueprints for s in workplan.steps]:
-        _bp = deserialize(bp, RomsMarblBlueprint)
-        out_path = _bp.output_path
+    for bp in [s.blueprint for s in workplan.steps]:
+        _bp = deserialize(Path(bp), RomsMarblBlueprint)
+        out_path = _bp.runtime_params.output_dir
+        print(out_path)
         shutil.rmtree(out_path / "ROMS", ignore_errors=True)
         shutil.rmtree(out_path / "output", ignore_errors=True)
         shutil.rmtree(out_path / "JOINED_OUTPUT", ignore_errors=True)
