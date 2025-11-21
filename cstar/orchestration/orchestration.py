@@ -145,7 +145,7 @@ _TValue = t.TypeVar("_TValue")
 
 
 class Planner:
-    """Identifies depdendencies of a workplan to produce an execution plan."""
+    """Identifies dependencies of a workplan to produce an execution plan."""
 
     workplan: Workplan
     """The workplan to plan."""
