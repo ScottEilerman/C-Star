@@ -9,6 +9,7 @@ import sys
 from pathlib import Path
 from time import sleep, time
 
+import networkx as nx
 from prefect import flow, task
 from prefect.context import TaskRunContext
 from prefect.futures import wait
@@ -164,32 +165,43 @@ class WorkTask:
 def build_and_run(workplan: Workplan):
     tasks = {}
     launcher = SlurmLauncher()
+
+    graph = nx.DiGraph()
     # create all tasks first
     for step in workplan.steps:
         print(f"Making task for {step.name}")
-        tasks[step.name] = WorkTask(step, launcher)
+        wt = WorkTask(step, launcher)
+        tasks[step.name] = wt
+        graph.add_node(wt)
     # map step dependencies as task dependencies
     for name, t in tasks.items():
-        t.depends_on = [tasks[n] for n in t.step.depends_on]
+        for dep in t.step.depends_on:
+            t.depends_on = [tasks[n] for n in t.step.depends_on]
+            graph.add_edge(dep, t)
         print(f"name: {name}, deps: {t.depends_on}")
+
+    assert nx.is_directed_acyclic_graph(graph)
 
     submissions = {}
     checks = {}
-    # submit everything for execution with dependencies
-    for t in tasks.values():
-        print(f"launching {t.name}")
-        submissions[t.name] = t.launch.submit() #wait_for= [dep.handle for dep in t.depends_on]
 
+    # submit everything for execution with dependencies
+    for t in nx.topological_sort(graph):
+        print(f"launching {t.name}")
+        submissions[t.name] = t.launch.submit(wait_for = [submissions[dep.name] for dep in t.depend_on]) #wait_for= [dep.handle for dep in t.depends_on]
+
+    wait(*submissions.values())
     # create check tasks for every task, depending on their real dependencies and their
     # own launch task
-    for t in tasks.values():
+
+    for t in nx.topological_sort(graph):
         print(f"checking {t.name} with handle {t.handle}")
 
-        checks[t.name] = t.check.submit(wait_for = [submissions[t.name]]) #wait_for = [dep.handle for dep in t.depends_on] + [t.handle]
+        checks[t.name] = t.check.submit(wait_for = [submissions[t.name]] + [checks[dep.name] for dep in t.depend_on]) #wait_for = [dep.handle for dep in t.depends_on] + [t.handle]
 
-    all_tasks = [*submissions.values(), *checks.values()]
-    print(all_tasks)
-    wait(all_tasks)
+    # all_tasks = [*submissions.values(), *checks.values()]
+    # print(all_tasks)
+    wait(*checks.values())
 
 if __name__ == "__main__":
     os.environ["CSTAR_INTERACTIVE"] = "0"
