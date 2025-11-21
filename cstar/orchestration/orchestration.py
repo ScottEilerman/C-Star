@@ -344,7 +344,7 @@ class Launcher(t.Protocol, t.Generic[_THandle]):
     """Contract required to implement a task launcher."""
 
     @classmethod
-    async def launch(cls, step: Step, dependencies: list[_THandle]) -> Task[_THandle]:
+    def launch(cls, step: Step, dependencies: list[_THandle]) -> Task[_THandle]:
         """Launch a process for a step.
 
         Parameters
@@ -360,7 +360,7 @@ class Launcher(t.Protocol, t.Generic[_THandle]):
         ...
 
     @classmethod
-    async def query_status(cls, step: Step, item: Task[_THandle] | _THandle) -> Status:
+    def query_status(cls, step: Step, item: Task[_THandle] | _THandle) -> Status:
         """Retrieve the current status for a running task.
 
         Parameters

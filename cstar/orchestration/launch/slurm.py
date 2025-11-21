@@ -38,6 +38,7 @@ def cache_key_func(context: TaskRunContext, params: dict[str, t.Any]) -> str:
     str
         The cache key for the current context.
     """
+    print(params)
     cache_key = f"{os.getenv('CSTAR_RUNID')}_{params['step'].name}_{context.task.name}"
     print(f"Cache check: {cache_key}")
     return cache_key
@@ -128,9 +129,8 @@ app_to_cmd_map: dict[str, StepToCommandConversionFn] = {
 class SlurmLauncher(Launcher[SlurmHandle]):
     """A launcher that executes steps in a SLURM-enabled cluster."""
 
-    @task(persist_result=True, cache_key_fn=cache_key_func)
     @staticmethod
-    async def _submit(step: Step, dependencies: list[SlurmHandle]) -> SlurmHandle:
+    def _submit(step: Step, dependencies: list[SlurmHandle]) -> SlurmHandle:
         """Submit a step to SLURM as a new batch allocation.
 
         Parameters
@@ -185,7 +185,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         raise RuntimeError(f"Unable to retrieve scheduled job ID for: {step.name}")
 
     @staticmethod
-    async def _status(step: Step, handle: SlurmHandle) -> ExecutionStatus:
+    def _status(step: Step, handle: SlurmHandle) -> ExecutionStatus:
         """Retrieve the status of a step running in SLURM.
 
         Parameters
@@ -209,9 +209,9 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         return status
 
     @classmethod
-    async def launch(
+    def launch(
         cls, step: Step, dependencies: list[SlurmHandle]
-    ) -> Task[SlurmHandle]:
+    ) -> SlurmHandle:
         """Launch a step in SLURM.
 
         Parameters
@@ -226,15 +226,11 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         Task[SlurmHandle]
             A Task containing information about the newly submitted job.
         """
-        handle = await SlurmLauncher._submit(step, dependencies)
-        return Task(
-            status=Status.Submitted,
-            step=step,
-            handle=handle,
-        )
+        handle = SlurmLauncher._submit(step, dependencies)
+        return handle
 
     @classmethod
-    async def query_status(
+    def query_status(
         cls, step: Step, item: Task[SlurmHandle] | SlurmHandle
     ) -> Status:
         """Retrieve the status of an item.
@@ -252,7 +248,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
             The current status of the item.
         """
         handle = item.handle if isinstance(item, Task) else item
-        slurm_status = await SlurmLauncher._status(step, handle)
+        slurm_status = SlurmLauncher._status(step, handle)
 
         print(f"SLURM job `{handle.pid}` status is `{slurm_status}`")
 
