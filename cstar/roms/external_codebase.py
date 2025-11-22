@@ -40,8 +40,7 @@ class ROMSExternalCodeBase(ExternalCodeBase):
         cstar_sysmgr.environment.set_env_var(
             "PATH", f"{os.environ.get('PATH')}:{roms_root / 'Tools-Roms'}"
         )
-        
-        print(os.environ)
+
         # Compile NHMG library
         _run_cmd(
             f"make nhmg COMPILER={cstar_sysmgr.environment.compiler}",
