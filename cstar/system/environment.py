@@ -3,7 +3,7 @@ import os
 import platform
 from pathlib import Path
 
-from dotenv import dotenv_values, set_key
+from dotenv import dotenv_values
 
 from cstar.base.utils import _run_cmd
 

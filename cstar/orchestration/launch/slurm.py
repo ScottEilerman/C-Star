@@ -1,10 +1,9 @@
-from datetime import datetime
 import os
 import sys
 import typing as t
+from datetime import datetime
 from pathlib import Path
 
-from prefect import task
 from prefect.context import TaskRunContext
 
 from cstar.base.utils import _run_cmd
@@ -159,7 +158,10 @@ class SlurmLauncher(Launcher[SlurmHandle]):
             step_converter = app_to_cmd_map[converter_override]
 
         command = step_converter(step)
-        script_path = Path.cwd() / f"cstar_{step.name}_{datetime.strftime(datetime.now(), '%Y%m%d_%H%M%S')}.sh" # todo, run-id, etc.
+        script_path = (
+            Path.cwd()
+            / f"cstar_{step.name}_{datetime.strftime(datetime.now(), '%Y%m%d_%H%M%S')}.sh"
+        )  # todo, run-id, etc.
         job = create_scheduler_job(
             commands=command,
             account_key=os.getenv("CSTAR_ACCOUNT_KEY", ""),
@@ -211,9 +213,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         return status
 
     @classmethod
-    def launch(
-        cls, step: Step, dependencies: list[SlurmHandle]
-    ) -> SlurmHandle:
+    def launch(cls, step: Step, dependencies: list[SlurmHandle]) -> SlurmHandle:
         """Launch a step in SLURM.
 
         Parameters
@@ -232,9 +232,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         return handle
 
     @classmethod
-    def query_status(
-        cls, step: Step, item: Task[SlurmHandle] | SlurmHandle
-    ) -> Status:
+    def query_status(cls, step: Step, item: Task[SlurmHandle] | SlurmHandle) -> Status:
         """Retrieve the status of an item.
 
         Parameters
