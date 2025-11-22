@@ -1,3 +1,4 @@
+from datetime import datetime
 import os
 import sys
 import typing as t
@@ -158,13 +159,14 @@ class SlurmLauncher(Launcher[SlurmHandle]):
             step_converter = app_to_cmd_map[converter_override]
 
         command = step_converter(step)
+        script_path = Path.cwd() / f"cstar_{step.name}_{datetime.strftime(datetime.now(), '%Y%m%d_%H%M%S')}.sh" # todo, run-id, etc.
         job = create_scheduler_job(
             commands=command,
             account_key=os.getenv("CSTAR_ACCOUNT_KEY", ""),
             cpus=bp.cpus_needed,
             nodes=None,  # let existing logic handle this
             cpus_per_node=None,  # let existing logic handle this
-            script_path=None,  # puts it in current dir
+            script_path=script_path,  # puts it in current dir
             run_path=bp.runtime_params.output_dir,
             job_name=job_name,
             output_file=None,  # to fill with some convention
