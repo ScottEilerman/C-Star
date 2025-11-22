@@ -4,7 +4,7 @@ import typing as t
 from pathlib import Path
 
 from cstar.cli.core import RegistryResult, cli_activity
-from cstar.orchestration.dag_runner import build_and_run_dag
+from cstar.orchestration.orchestration import build_and_run
 
 
 async def handle(ns: argparse.Namespace) -> None:
@@ -18,12 +18,12 @@ async def handle(ns: argparse.Namespace) -> None:
     # TODO: load from ~/.cstar/config (e.g. cstar config init)
     os.environ["CSTAR_INTERACTIVE"] = "0"
     os.environ["CSTAR_ACCOUNT_KEY"] = "ees250129"
-    os.environ["CSTAR_QUEUE_NAME"] = "shared"
+    os.environ["CSTAR_QUEUE_NAME"] = "wholenode"
     os.environ["CSTAR_ORCHESTRATED"] = "1"
 
     os.environ["CSTAR_RUNID"] = ns.name
 
-    await build_and_run_dag(Path(ns.path))
+    build_and_run(Path(ns.path))
     print(f"Completed handling command: {ns}")
 
 
