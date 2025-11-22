@@ -135,8 +135,8 @@ class CStarEnvironment:
             The variables that were loaded
         """
         env_vars = dotenv_values(self.system_env_path)
-        user_env_vars = dotenv_values(self.user_env_path)
-        env_vars.update(user_env_vars)
+        # user_env_vars = dotenv_values(self.user_env_path)
+        # env_vars.update(user_env_vars)
 
         env_vars = {k: v for k, v in env_vars.items() if v is not None}
         os.environ.update(env_vars)

@@ -10,7 +10,6 @@ from prefect import flow, task
 from prefect.context import TaskRunContext
 from prefect.futures import wait
 
-from cstar.orchestration.launch.slurm import SlurmLauncher
 from cstar.orchestration.models import RomsMarblBlueprint, Step, Workplan
 from cstar.orchestration.serialization import deserialize
 
@@ -255,6 +254,7 @@ def build_and_run(wp_path: Path | str):
     tasks = {}
     graph = nx.DiGraph()
 
+    from cstar.orchestration.launch.slurm import SlurmLauncher
     launcher = SlurmLauncher()  # todo, figure out launcher from WP or env
 
     workplan = deserialize(Path(wp_path), Workplan)
