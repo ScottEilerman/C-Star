@@ -128,35 +128,47 @@ def cache_func(context: TaskRunContext, params):
 #     wait(list(status_dict.values()))
 #
 
+def clear_working_dir(step: Step):
+    # TODO this is temporary only, for my sanity
+    _bp = deserialize(Path(step.blueprint), RomsMarblBlueprint)
+    out_path = _bp.runtime_params.output_dir
+    print(f"clearing {out_path}")
+    shutil.rmtree(out_path / "ROMS", ignore_errors=True)
+    shutil.rmtree(out_path / "output", ignore_errors=True)
+    shutil.rmtree(out_path / "JOINED_OUTPUT", ignore_errors=True)
+
 class WorkTask:
     def __init__(self, step: Step, launcher: Launcher):
         self.step = step
         self.name = step.name
-        self._handle = None
+        self._handle: ProcessHandle = None
         self.launcher = launcher
         self.depends_on: list[WorkTask] = []
 
     @property
     def handle(self) -> ProcessHandle:
         if self._handle is None:
-            print(f"no handle exists for {self.name}, submitting job to establish future")
-            self._handle = self.launch()
+            raise ValueError("handle requested for {self.name} before it exists")
+            # print(f"no handle exists for {self.name}, submitting job to establish future")
+            # self._handle = self.launch()
         return self._handle
 
     @task(persist_result=True, cache_key_fn=cache_func, task_run_name="launch-{self.name}")
     def launch(self):
-        handle = self.launcher.launch(
+
+        clear_working_dir(self.step) # todo temporary 
+
+        self._handle = self.launcher.launch(
             self.step, dependencies=[dep.handle for dep in self.depends_on]
         )
-        if self._handle is None:
-            self._handle = handle
-        return handle
+            
+        return self._handle
 
     @task(persist_result=True, cache_key_fn=cache_func, task_run_name="check-{self.name}")
     def check(self):
         while True:
             status = self.launcher.query_status(self.step, self.handle)
-            print(f"status of {self.name} is {status}")
+            print(f"status of {self.name} is {status.name}")
             if Status.is_terminal(status):
                 return status
             sleep(15)
@@ -173,11 +185,12 @@ def build_and_run(workplan: Workplan):
         wt = WorkTask(step, launcher)
         tasks[step.name] = wt
         graph.add_node(wt)
+
     # map step dependencies as task dependencies
     for name, t in tasks.items():
         for dep in t.step.depends_on:
-            t.depends_on = [tasks[n] for n in t.step.depends_on]
-            graph.add_edge(dep, t)
+            t.depends_on.append(tasks[dep])
+            graph.add_edge(tasks[dep], t)
         print(f"name: {name}, deps: {t.depends_on}")
 
     assert nx.is_directed_acyclic_graph(graph)
@@ -185,23 +198,27 @@ def build_and_run(workplan: Workplan):
     submissions = {}
     checks = {}
 
+    print(graph)
+    print([t for t in nx.topological_sort(graph)])
+
     # submit everything for execution with dependencies
     for t in nx.topological_sort(graph):
+        print(t)
         print(f"launching {t.name}")
-        submissions[t.name] = t.launch.submit(wait_for = [submissions[dep.name] for dep in t.depend_on]) #wait_for= [dep.handle for dep in t.depends_on]
+        submissions[t.name] = t.launch.submit(wait_for = [submissions[dep.name] for dep in t.depends_on]) #wait_for= [dep.handle for dep in t.depends_on]
 
-    wait(*submissions.values())
+    wait(list(submissions.values()))
     # create check tasks for every task, depending on their real dependencies and their
     # own launch task
 
     for t in nx.topological_sort(graph):
         print(f"checking {t.name} with handle {t.handle}")
 
-        checks[t.name] = t.check.submit(wait_for = [submissions[t.name]] + [checks[dep.name] for dep in t.depend_on]) #wait_for = [dep.handle for dep in t.depends_on] + [t.handle]
+        checks[t.name] = t.check.submit(wait_for = [submissions[t.name]] + [checks[dep.name] for dep in t.depends_on]) #wait_for = [dep.handle for dep in t.depends_on] + [t.handle]
 
     # all_tasks = [*submissions.values(), *checks.values()]
     # print(all_tasks)
-    wait(*checks.values())
+    wait(list(checks.values()))
 
 if __name__ == "__main__":
     os.environ["CSTAR_INTERACTIVE"] = "0"
@@ -216,13 +233,7 @@ if __name__ == "__main__":
     os.environ["CSTAR_RUNID"] = my_run_name
 
     workplan = deserialize(Path(wp_path), Workplan)
-    for bp in [s.blueprint for s in workplan.steps]:
-        _bp = deserialize(Path(bp), RomsMarblBlueprint)
-        out_path = _bp.runtime_params.output_dir
-        print(out_path)
-        shutil.rmtree(out_path / "ROMS", ignore_errors=True)
-        shutil.rmtree(out_path / "output", ignore_errors=True)
-        shutil.rmtree(out_path / "JOINED_OUTPUT", ignore_errors=True)
+
 
     build_and_run(workplan)
 
