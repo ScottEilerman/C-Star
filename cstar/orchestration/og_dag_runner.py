@@ -7,126 +7,27 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from time import sleep, time
+from time import sleep
 
 import networkx as nx
 from prefect import flow, task
 from prefect.context import TaskRunContext
 from prefect.futures import wait
 
-from cstar.execution.handler import ExecutionStatus
-from cstar.execution.scheduler_job import create_scheduler_job, get_status_of_slurm_job
 from cstar.orchestration.launch.slurm import SlurmLauncher
 from cstar.orchestration.models import RomsMarblBlueprint, Step, Workplan
-from cstar.orchestration.orchestration import ProcessHandle, Launcher, Status
+from cstar.orchestration.orchestration import Launcher, ProcessHandle, Status
 from cstar.orchestration.serialization import deserialize
-
-# JobId = str
-# JobStatus = str
-
-# these are little mocks you can uncomment if you want to run this locally and not on anvil
-
-# def create_scheduler_job(*args, **kwargs):
-#     class dummy:
-#         def submit(self):
-#             pass
-#
-#         @property
-#         def id(self ):
-#             return uuid4()
-#
-#     return dummy()
-#
-#
-# def get_status_of_slurm_job(*args, **kwargs):
-#     sleep(30)
-#     return ExecutionStatus.COMPLETED
 
 
 def cache_func(context: TaskRunContext, params):
     """Cache on a combination of the task name and user-assigned run id"""
-    cache_key = f"{os.getenv('CSTAR_RUNID')}_{params['self'].step.name}_{context.task.name}"
+    cache_key = (
+        f"{os.getenv('CSTAR_RUNID')}_{params['self'].step.name}_{context.task.name}"
+    )
     print(f"Cache check: {cache_key}")
     return cache_key
 
-#
-# @task(persist_result=True, cache_key_fn=cache_func, log_prints=True)
-# def submit_job(step: Step, job_dep_ids: list[str] = []) -> JobId:
-#     bp_path = step.blueprint
-#     bp = deserialize(Path(bp_path), RomsMarblBlueprint)
-#
-#     job = create_scheduler_job(
-#         commands=f"python3 -m cstar.entrypoint.worker.worker -b {bp_path}",
-#         account_key=os.getenv("CSTAR_ACCOUNT_KEY", ""),
-#         cpus=bp.cpus_needed,
-#         nodes=None,  # let existing logic handle this
-#         cpus_per_node=None,  # let existing logic handle this
-#         script_path=None,  # puts it in current dir
-#         run_path=bp.runtime_params.output_dir,
-#         job_name=None,  # to fill with some convention
-#         output_file=None,  # to fill with some convention
-#         queue_name=os.getenv("CSTAR_QUEUE_NAME"),
-#         walltime="00:10:00",  # TODO how to determine this one?
-#         depends_on=job_dep_ids,
-#     )
-#
-#     job.submit()
-#     print(f"Submitted {step.name} with id {job.id}")
-#     return str(job.id)
-#
-#
-# @task(persist_result=True, cache_key_fn=cache_func, log_prints=True)
-# def check_job(step, job_id, deps: list[str] = []) -> ExecutionStatus:
-#     t_start = time()
-#     dur = 10 * 60
-#     while time() - t_start < dur:
-#         status = get_status_of_slurm_job(job_id)
-#         print(f"status of {step.name} is {status}")
-#         if status in [
-#             ExecutionStatus.CANCELLED,
-#             ExecutionStatus.FAILED,
-#             ExecutionStatus.COMPLETED,
-#         ]:
-#             return status
-#         sleep(10)
-#     return status
-#
-#
-# @flow
-# def build_and_run_dag(workplan_path: Path):
-#     wp = deserialize(workplan_path, Workplan)
-#
-#     id_dict = {}
-#     status_dict = {}
-#
-#     no_dep_steps = []
-#
-#     follow_up_steps = []
-#
-#     for step in wp.steps:
-#         if not step.depends_on:
-#             no_dep_steps.append(step)
-#         else:
-#             follow_up_steps.append(step)
-#
-#     for step in no_dep_steps:
-#         id_dict[step.name] = submit_job(step)
-#         status_dict[step.name] = check_job.submit(step, id_dict[step.name])
-#
-#     while True:
-#         for step in follow_up_steps:
-#             if all(s in id_dict for s in step.depends_on):
-#                 id_dict[step.name] = submit_job(
-#                     step, [id_dict[s] for s in step.depends_on]
-#                 )
-#                 status_dict[step.name] = check_job.submit(
-#                     step, id_dict[step.name], [status_dict[s] for s in step.depends_on]
-#                 )
-#         if len(id_dict) == len(wp.steps):
-#             break
-#
-#     wait(list(status_dict.values()))
-#
 
 def clear_working_dir(step: Step):
     # TODO this is temporary only, for my sanity
@@ -137,7 +38,10 @@ def clear_working_dir(step: Step):
     shutil.rmtree(out_path / "output", ignore_errors=True)
     shutil.rmtree(out_path / "JOINED_OUTPUT", ignore_errors=True)
 
+
 class WorkTask:
+    """Manage execution and monitoring of a step via prefect tasks"""
+
     def __init__(self, step: Step, launcher: Launcher):
         self.step = step
         self.name = step.name
@@ -148,23 +52,27 @@ class WorkTask:
     @property
     def handle(self) -> ProcessHandle:
         if self._handle is None:
-            raise ValueError("handle requested for {self.name} before it exists")
-            # print(f"no handle exists for {self.name}, submitting job to establish future")
-            # self._handle = self.launch()
+            print(
+                f"no handle exists for {self.name}, likely it was launched previously and cached, or else sequencing has gone bad"
+            )
+            self._handle = self.launch()
         return self._handle
 
-    @task(persist_result=True, cache_key_fn=cache_func, task_run_name="launch-{self.name}")
+    @task(
+        persist_result=True, cache_key_fn=cache_func, task_run_name="launch-{self.name}"
+    )
     def launch(self):
-
-        clear_working_dir(self.step) # todo temporary 
-
-        self._handle = self.launcher.launch(
+        clear_working_dir(self.step)  # todo temporary
+        handle = self.launcher.launch(
             self.step, dependencies=[dep.handle for dep in self.depends_on]
         )
-            
-        return self._handle
+        if self._handle is None:
+            self._handle = handle
+        return handle
 
-    @task(persist_result=True, cache_key_fn=cache_func, task_run_name="check-{self.name}")
+    @task(
+        persist_result=True, cache_key_fn=cache_func, task_run_name="check-{self.name}"
+    )
     def check(self):
         while True:
             status = self.launcher.query_status(self.step, self.handle)
@@ -173,20 +81,21 @@ class WorkTask:
                 return status
             sleep(15)
 
-@flow
-def build_and_run(workplan: Workplan):
-    tasks = {}
-    launcher = SlurmLauncher()
 
+@flow
+def build_and_run(workplan: Workplan, launcher: SlurmLauncher):
+    tasks = {}
     graph = nx.DiGraph()
-    # create all tasks first
+
+    # create all tasks first and add to graph
+    # collect tasks in dict too just for easy reference
     for step in workplan.steps:
         print(f"Making task for {step.name}")
         wt = WorkTask(step, launcher)
         tasks[step.name] = wt
         graph.add_node(wt)
 
-    # map step dependencies as task dependencies
+    # map step dependencies as task dependencies and add graph edges
     for name, t in tasks.items():
         for dep in t.step.depends_on:
             t.depends_on.append(tasks[dep])
@@ -202,23 +111,30 @@ def build_and_run(workplan: Workplan):
     print([t for t in nx.topological_sort(graph)])
 
     # submit everything for execution with dependencies
+    # use topological sort so that we don't reference dependencies (from submissions dict or trying to get a handle)
+    # before they've been submitted.
+    # note: we could probably skip nx if we implemented our prefect tasks as transactional, but this is easier
+    # for now. see https://docs.prefect.io/v3/advanced/transactions#write-your-first-transaction
     for t in nx.topological_sort(graph):
         print(t)
         print(f"launching {t.name}")
-        submissions[t.name] = t.launch.submit(wait_for = [submissions[dep.name] for dep in t.depends_on]) #wait_for= [dep.handle for dep in t.depends_on]
+        submissions[t.name] = t.launch.submit(
+            wait_for=[submissions[dep.name] for dep in t.depends_on]
+        )
 
+    # wait for all the slurm submissions to get set up before checking anything
     wait(list(submissions.values()))
-    # create check tasks for every task, depending on their real dependencies and their
-    # own launch task
 
+    # create check tasks for every task, depending on their real dependencies and their own launch task
     for t in nx.topological_sort(graph):
-        print(f"checking {t.name} with handle {t.handle}")
+        print(f"adding check task for {t.name} with handle {t.handle}")
+        checks[t.name] = t.check.submit(
+            wait_for=[submissions[t.name]] + [checks[dep.name] for dep in t.depends_on]
+        )
 
-        checks[t.name] = t.check.submit(wait_for = [submissions[t.name]] + [checks[dep.name] for dep in t.depends_on]) #wait_for = [dep.handle for dep in t.depends_on] + [t.handle]
-
-    # all_tasks = [*submissions.values(), *checks.values()]
-    # print(all_tasks)
+    # wait on all checks to finish
     wait(list(checks.values()))
+
 
 if __name__ == "__main__":
     os.environ["CSTAR_INTERACTIVE"] = "0"
@@ -234,6 +150,4 @@ if __name__ == "__main__":
 
     workplan = deserialize(Path(wp_path), Workplan)
 
-
-    build_and_run(workplan)
-
+    build_and_run(workplan, SlurmLauncher())
