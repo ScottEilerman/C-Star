@@ -1,26 +1,18 @@
-import asyncio
+import os
+import shutil
 import typing as t
-from enum import IntEnum, StrEnum, auto
+from enum import IntEnum, auto
+from pathlib import Path
+from time import sleep
 
 import networkx as nx
-from pydantic import Field
+from prefect import flow, task
+from prefect.context import TaskRunContext
+from prefect.futures import wait
 
-from cstar.base.exceptions import CstarExpectationFailed
-from cstar.orchestration.models import Step, Workplan
-
-KEY_STATUS: t.Literal["status"] = "status"
-KEY_STEP: t.Literal["step"] = "step"
-KEY_TASK: t.Literal["task"] = "task"
-
-
-class RunMode(StrEnum):
-    """Specify the blocking behavior during plan execution."""
-
-    Monitor = auto()
-    """Block until tasks complete."""
-
-    Schedule = auto()
-    """Block until tasks are scheduled."""
+from cstar.orchestration.launch.slurm import SlurmLauncher
+from cstar.orchestration.models import RomsMarblBlueprint, Step, Workplan
+from cstar.orchestration.serialization import deserialize
 
 
 class ProcessHandle:
@@ -144,202 +136,6 @@ class Task(t.Generic[_THandle]):
 _TValue = t.TypeVar("_TValue")
 
 
-class Planner:
-    """Identifies dependencies of a workplan to produce an execution plan."""
-
-    workplan: Workplan
-    """The workplan to plan."""
-
-    graph: nx.DiGraph = Field(init=False)
-    """The graph used for task planning."""
-
-    def __init__(
-        self,
-        workplan: Workplan,
-    ) -> None:
-        """Initialize the planner and build an execution graph.
-
-        Parameters
-        ----------
-        workplan: Workplan
-            The workplan to be planned.
-        """
-        self.workplan = workplan
-        self.graph = Planner._workplan_to_graph(workplan)
-
-    @classmethod
-    def _workplan_to_graph(cls, workplan: Workplan) -> nx.DiGraph:
-        """Convert a workplan into a graph for planning.
-
-        Parameters
-        ----------
-        workplan: Workplan
-            The workplan to be converted.
-
-        Returns
-        -------
-        nx.DiGraph
-            A graph of the execution plan.
-        """
-        data: t.Mapping[str, list[str]] = {s.name: [] for s in workplan.steps}
-        for step in workplan.steps:
-            for prereq in step.depends_on:
-                data[prereq].append(step.name)
-
-        g = nx.DiGraph(data)
-        defaults = {
-            n.name: {KEY_STATUS: Status.Unsubmitted, KEY_STEP: n, KEY_TASK: None}
-            for n in workplan.steps
-        }
-        nx.set_node_attributes(g, values=defaults)
-        return g
-
-    def flatten(self) -> t.Iterable[Step]:
-        """Return the planned steps in execution order.
-
-        Returns
-        -------
-        Iterable[Step]
-            A traversal of the execution plan honoring all dependencies.
-        """
-
-        def f(step: Step) -> bool:
-            """Filter steps that are non-null."""
-            return step is not None
-
-        keys = nx.topological_sort(self.graph)
-        steps = self.retrieve_all(KEY_STEP, filter_fn=f)
-        return [steps[k] for k in keys]
-
-    @t.overload
-    def store(self, n: str, key: t.Literal["status"], value: Status) -> None: ...
-
-    @t.overload
-    def store(self, n: str, key: t.Literal["step"], value: Step) -> None: ...
-
-    @t.overload
-    def store(self, n: str, key: t.Literal["task"], value: Task) -> None: ...
-
-    def store(self, n: str, key: str, value: object) -> None:
-        """Store an arbitrary attribute on a node in the plan.
-
-        Parameters
-        ----------
-        n : str
-            The node identifier.
-        key : str
-            The key to be written to on the node.
-        value : object
-            The value to be stored.
-        """
-        if key in {KEY_STATUS, KEY_STEP, KEY_TASK}:
-            msg = f"WARNING: Writing to reserved key `{key}` on node `{n}`"
-            print(msg)
-
-        node = self.graph.nodes[n]
-        node[key] = value
-
-    @t.overload
-    def retrieve(
-        self,
-        n: str,
-        key: t.Literal["status"],
-        default: Status | None = None,
-    ) -> Status | None: ...
-
-    @t.overload
-    def retrieve(
-        self,
-        n: str,
-        key: t.Literal["step"],
-        default: Step | None = None,
-    ) -> Step | None: ...
-
-    @t.overload
-    def retrieve(
-        self,
-        n: str,
-        key: t.Literal["task"],
-        default: Task | None = None,
-    ) -> Task | None: ...
-
-    def retrieve(
-        self,
-        n: str,
-        key: str,
-        default: t.Any | None = None,
-    ) -> t.Any | None:
-        """Retrieve an attribute from a node in the plan.
-
-        Parameters
-        ----------
-        n : str
-            The node identifier.
-        key : str
-            The key to be retrieved from the node.
-        default : t.Any | None
-            The default value to retrieve if one is not found.
-
-        Returns
-        -------
-        t.Any
-            The value stored on the node retrieved using the key.
-        """
-        node = self.graph.nodes[n]
-        return node.get(key, default)
-
-    @t.overload
-    def retrieve_all(
-        self,
-        key: t.Literal["status"],
-        default: Status | None = None,
-        filter_fn: t.Callable[[Status], bool] | None = None,
-    ) -> t.Mapping[str, Status]: ...
-
-    @t.overload
-    def retrieve_all(
-        self,
-        key: t.Literal["step"],
-        default: Step | None = None,
-        filter_fn: t.Callable[[Step], bool] | None = None,
-    ) -> t.Mapping[str, Step]: ...
-
-    @t.overload
-    def retrieve_all(
-        self,
-        key: t.Literal["task"],
-        default: Task | None = None,
-        filter_fn: t.Callable[[Task], bool] | None = None,
-    ) -> t.Mapping[str, Task]: ...
-
-    def retrieve_all(
-        self,
-        key: str,
-        default: t.Any | None = None,
-        filter_fn: t.Callable[[t.Any], bool] | None = None,
-    ) -> t.Mapping[str, t.Any]:
-        """Retrieve a user-defined value for every node in the plan.
-
-        Parameters
-        ----------
-        key : str
-            The key to be retrieved from the node.
-        default : _TValue | None
-            The default value to retrieve if one is not found.
-        filter_fn : Callable[[_TValue], bool] | None
-            A filter function to execute against the returned values.
-
-        Returns
-        -------
-        Mapping[str, _TValue]
-            Mapping of node name to value retrieved for the key.
-        """
-        values = {n: self.graph.nodes[n].get(key, default) for n in self.graph.nodes}
-        if filter_fn:
-            values = {k: v for k, v in values.items() if filter_fn(v)}
-        return values
-
-
 class Launcher(t.Protocol, t.Generic[_THandle]):
     """Contract required to implement a task launcher."""
 
@@ -376,7 +172,7 @@ class Launcher(t.Protocol, t.Generic[_THandle]):
         ...
 
     @classmethod
-    async def cancel(cls, item: Task[_THandle]) -> Task[_THandle]:
+    def cancel(cls, item: Task[_THandle]) -> Task[_THandle]:
         """Cancel a task, if possible.
 
         Parameters
@@ -392,233 +188,121 @@ class Launcher(t.Protocol, t.Generic[_THandle]):
         ...
 
 
-class Orchestrator:
-    """Manage the execution of a `Workplan`."""
+def cache_func(context: TaskRunContext, params):
+    """Cache on a combination of the task name and user-assigned run id"""
+    cache_key = (
+        f"{os.getenv('CSTAR_RUNID')}_{params['self'].step.name}_{context.task.name}"
+    )
+    print(f"Cache check: {cache_key}")
+    return cache_key
 
-    planner: Planner
-    """The planner used by the orchestrator to prioritize tasks."""
 
-    launcher: Launcher
-    """The launcher used by the orchestrator to manage task execution."""
+def clear_working_dir(step: Step):
+    # TODO this is temporary only, for my sanity
+    _bp = deserialize(Path(step.blueprint), RomsMarblBlueprint)
+    out_path = _bp.runtime_params.output_dir
+    print(f"clearing {out_path}")
+    shutil.rmtree(out_path / "ROMS", ignore_errors=True)
+    shutil.rmtree(out_path / "output", ignore_errors=True)
+    shutil.rmtree(out_path / "JOINED_OUTPUT", ignore_errors=True)
 
-    def __init__(self, planner: Planner, launcher: Launcher) -> None:
-        """Initialize the orchestrator.
 
-        Parameters
-        ----------
-        planner : Planner
-            The planner containing an execution plan for a workplan.
-        launcher : Launcher
-            A launcher to manage processes for tasks.
-        """
-        self.planner = planner
+class WorkTask:
+    """Manage execution and monitoring of a step via prefect tasks"""
+
+    def __init__(self, step: Step, launcher: Launcher):
+        self.step = step
+        self.name = step.name
+        self._handle: ProcessHandle = None
         self.launcher = launcher
+        self.depends_on: list[WorkTask] = []
 
-    def get_open_nodes(self, *, mode: RunMode) -> set[str] | None:
-        """Retrieve the set of task nodes with a non-terminal state that are
-        executing or ready to execute.
-
-        Returns
-        -------
-        set[str] | None
-            - Set of open nodes ready for some processing actions.
-            - An empty set indicates no actions are currently possible.
-            - Null indicates all nodes are closed (traversal is complete).
-        """
-        g = self.planner.graph
-        open_nodes: list[str] = []
-        closed_set = self.get_closed_nodes(mode=mode)
-
-        if self.planner.workplan:
-            nodes = {s.name for s in self.planner.workplan.steps}
-        else:
-            nodes = {n for n in self.planner.graph}
-
-        working_list = set(nodes).difference(closed_set)
-
-        if any(Status.is_failure(g.nodes[u][KEY_STATUS]) for u in closed_set):
-            print("Exiting due to execution failures")
-            return None
-
-        for n in working_list:
-            in_edges = list(g.in_edges(n))
-            in_degree = g.in_degree(n)
-
-            satisfied = all(
-                Status.is_running(g.nodes[u][KEY_STATUS])
-                or Status.is_terminal(g.nodes[u][KEY_STATUS])
-                if mode == RunMode.Schedule
-                else Status.is_terminal(g.nodes[u][KEY_STATUS])
-                for (u, _) in in_edges
+    @property
+    def handle(self) -> ProcessHandle:
+        if self._handle is None:
+            print(
+                f"no handle exists for {self.name}, likely it was launched previously and cached, or else sequencing has gone bad"
             )
+            self._handle = self.launch()
+        return self._handle
 
-            if in_degree == 0 or satisfied:
-                open_nodes.append(n)
+    @task(
+        persist_result=True, cache_key_fn=cache_func, task_run_name="launch-{self.name}"
+    )
+    def launch(self):
+        clear_working_dir(self.step)  # todo temporary
+        handle = self.launcher.launch(
+            self.step, dependencies=[dep.handle for dep in self.depends_on]
+        )
+        if self._handle is None:
+            self._handle = handle
+        return handle
 
-        if working_list:
-            # working list has options. if none are ready, return empty set.
-            return set(open_nodes)
+    @task(
+        persist_result=True, cache_key_fn=cache_func, task_run_name="check-{self.name}"
+    )
+    def check(self):
+        while True:
+            status = self.launcher.query_status(self.step, self.handle)
+            print(f"status of {self.name} is {status.name}")
+            if Status.is_terminal(status):
+                return status
+            sleep(15)
 
-        return None
 
-    def get_closed_nodes(self, *, mode: RunMode) -> set[str]:
-        """Retrieve the set of task nodes with a terminal state.
+@flow
+def build_and_run(wp_path: Path | str):
+    tasks = {}
+    graph = nx.DiGraph()
 
-        Returns
-        -------
-        set of str
-            A set of node IDs identifying nodes with a Done status.
-        """
-        targets = {Status.Done, Status.Cancelled, Status.Failed}
+    launcher = SlurmLauncher()  # todo, figure out launcher from WP or env
 
-        if mode == RunMode.Schedule:
-            targets.update({Status.Submitted, Status.Running})
+    workplan = deserialize(Path(wp_path), Workplan)
 
-        return set(
-            self.planner.retrieve_all(KEY_STATUS, filter_fn=lambda x: x in targets)
+    # create all tasks first and add to graph
+    # collect tasks in dict too just for easy reference
+    for step in workplan.steps:
+        print(f"Making task for {step.name}")
+        wt = WorkTask(step, launcher)
+        tasks[step.name] = wt
+        graph.add_node(wt)
+
+    # map step dependencies as task dependencies and add graph edges
+    for name, t in tasks.items():
+        for dep in t.step.depends_on:
+            t.depends_on.append(tasks[dep])
+            graph.add_edge(tasks[dep], t)
+        print(f"name: {name}, deps: {t.depends_on}")
+
+    assert nx.is_directed_acyclic_graph(graph)
+
+    submissions = {}
+    checks = {}
+
+    print(graph)
+    print([t for t in nx.topological_sort(graph)])
+
+    # submit everything for execution with dependencies
+    # use topological sort so that we don't reference dependencies (from submissions dict or trying to get a handle)
+    # before they've been submitted.
+    # note: we could probably skip nx if we implemented our prefect tasks as transactional, but this is easier
+    # for now. see https://docs.prefect.io/v3/advanced/transactions#write-your-first-transaction
+    for t in nx.topological_sort(graph):
+        print(t)
+        print(f"launching {t.name}")
+        submissions[t.name] = t.launch.submit(
+            wait_for=[submissions[dep.name] for dep in t.depends_on]
         )
 
-    def _locate_dependencies(self, step: Step) -> list[ProcessHandle] | None:
-        """Look for the dependencies of the step.
+    # wait for all the slurm submissions to get set up before checking anything
+    wait(list(submissions.values()))
 
-        Returns
-        -------
-        list[ProcessHandle] | None
-            The handles identifying the dependencies if the jobs are scheduled,
-            otherwise None.
+    # create check tasks for every task, depending on their real dependencies and their own launch task
+    for t in nx.topological_sort(graph):
+        print(f"adding check task for {t.name} with handle {t.handle}")
+        checks[t.name] = t.check.submit(
+            wait_for=[submissions[t.name]] + [checks[dep.name] for dep in t.depends_on]
+        )
 
-            An empty list indicates no dependencies.
-        """
-        if not step.depends_on:
-            return []
-
-        # TODO: replace this with proactively configuring the keys?
-        # - e.g. reverse lookup...
-        dep_tasks = [
-            self.planner.retrieve(dnode, KEY_TASK) for dnode in step.depends_on
-        ]
-
-        running_deps = [x for x in dep_tasks if x]
-
-        if len(running_deps) != len(step.depends_on):
-            # the dependencies have not been started. abort launch...
-            return None
-
-        return [d.handle for d in running_deps]
-
-    async def process_node(self, node: str) -> Task | None:
-        """Execute a task.
-
-        Parameters
-        ----------
-        node : str
-            The name of the node to process.
-
-        Returns
-        -------
-        Task | None
-            The created task, if successfully processed.
-        """
-        step = self.planner.retrieve(node, KEY_STEP, None)
-        if step is None:
-            msg = f"Unable to process. Invalid node identifier supplied: {node}"
-            raise ValueError(msg)
-
-        dependencies = self._locate_dependencies(step)
-        if dependencies is None:
-            # prerequisite tasks weren't all started, yet.
-            return None
-
-        if task := self.planner.retrieve(node, KEY_TASK):
-            status = await self.launcher.query_status(task.step, task)
-            task.status = status
-        else:
-            task = await self.launcher.launch(step, dependencies)
-            self.planner.store(node, KEY_TASK, task)
-            print(f"Launched step: {step.name}")
-
-        self.planner.store(node, KEY_STATUS, task.status)
-        return task
-
-    async def update_planner_state(self, n: str, task: Task | None) -> None:
-        """Update tracking information for the plan after starting a task or
-        fetching an update.
-
-        Parameters
-        ----------
-        n : str
-            Node name
-        task : Task | None
-            The newly started task (or None if task fails to start).
-        """
-        if task is None:
-            return
-
-        if task.status == Status.Done:
-            print(f"\t\tClosed node: {n}")
-            self.planner.store(n, KEY_STATUS, Status.Done)
-        elif task.status == Status.Failed:
-            print(f"\t\tFailed node: {n}")
-            # TODO: on failure, cancel all jobs if anything depends on it
-            # - NOTE: this may occur naturally with SLURM but not local launch
-            self.planner.store(n, KEY_STATUS, Status.Failed)
-            raise CstarExpectationFailed(f"Node {n} task failed.")
-
-    async def run(self, mode: RunMode) -> t.Mapping[str, Status]:
-        """Execute tasks that are ready and query status on running tasks.
-
-        Parameters
-        ----------
-        mode : RunMode
-            The operation mode. Passing `schedule` allows the orchestrator to
-            submit tasks without waiting for their completion. Passing `monitor`
-            causes the scheduler to track status for the tasks.
-
-        Returns
-        -------
-        Mapping[str, Status]
-            Mapping of node names to their current status.
-        """
-        open_set = self.get_open_nodes(mode=mode)
-
-        if open_set is None:
-            # no open nodes were found, return all current statuses
-            return self.planner.retrieve_all(
-                KEY_STATUS,
-                default=Status.Unsubmitted,
-            )
-
-        # Ensure task/result pairing is consistent with a list
-        open_nodes = list(open_set)
-        exec_tasks = [asyncio.Task(self.process_node(n)) for n in open_nodes]
-        exec_results = await asyncio.gather(*exec_tasks)
-
-        kvp = dict(zip(open_nodes, exec_results))
-        postproc_tasks = [
-            asyncio.Task(self.update_planner_state(n, t)) for n, t in kvp.items()
-        ]
-        cancellations: set[Task] = set()
-
-        try:
-            await asyncio.gather(*postproc_tasks)
-        except CstarExpectationFailed:
-            cancellations = {
-                v for v in kvp.values() if v and Status.is_running(v.status)
-            }
-
-        await self._cancel(cancellations)
-
-        return {k: v.status if v else Status.Unsubmitted for k, v in kvp.items()}
-
-    async def _cancel(self, cancellations: t.Iterable[Task]) -> None:
-        """Request the cancellation of running tasks.
-
-        Parameters
-        ----------
-        cancellations : Iterable[Task]
-            The tasks to be cancelled.
-        """
-        tasks = [asyncio.Task(self.launcher.cancel(task)) for task in cancellations]
-        results = await asyncio.gather(*tasks, return_exceptions=False)
-        for task in results:
-            self.planner.store(task.step.name, KEY_STATUS, task.status)
+    # wait on all checks to finish
+    wait(list(checks.values()))
