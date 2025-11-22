@@ -1,9 +1,9 @@
 import os
 import shutil
-import typing as t
 from enum import IntEnum, auto
 from pathlib import Path
 from time import sleep
+from typing import Generic, Protocol, TypeVar
 
 import networkx as nx
 from prefect import flow, task
@@ -95,10 +95,10 @@ class Status(IntEnum):
         return status in {Status.Submitted, Status.Running, Status.Ending}
 
 
-_THandle = t.TypeVar("_THandle", bound=ProcessHandle)
+_THandle = TypeVar("_THandle", bound=ProcessHandle)
 
 
-class Task(t.Generic[_THandle]):
+class Task(Generic[_THandle]):
     """A task represents a live-execution of a step."""
 
     status: Status
@@ -132,10 +132,10 @@ class Task(t.Generic[_THandle]):
         self.handle = handle
 
 
-_TValue = t.TypeVar("_TValue")
+_TValue = TypeVar("_TValue")
 
 
-class Launcher(t.Protocol, t.Generic[_THandle]):
+class Launcher(Protocol, Generic[_THandle]):
     """Contract required to implement a task launcher."""
 
     @classmethod
@@ -212,7 +212,7 @@ class WorkTask:
     def __init__(self, step: Step, launcher: Launcher):
         self.step = step
         self.name = step.name
-        self._handle: ProcessHandle = None
+        self._handle: ProcessHandle | None = None
         self.launcher = launcher
         self.depends_on: list[WorkTask] = []
 
@@ -255,6 +255,7 @@ def build_and_run(wp_path: Path | str):
     graph = nx.DiGraph()
 
     from cstar.orchestration.launch.slurm import SlurmLauncher
+
     launcher = SlurmLauncher()  # todo, figure out launcher from WP or env
 
     workplan = deserialize(Path(wp_path), Workplan)

@@ -1,5 +1,4 @@
 import asyncio
-import os
 from pathlib import Path
 
 import typer
@@ -8,24 +7,9 @@ from cstar.entrypoint import SimulationRunner
 from cstar.entrypoint.service import ServiceConfiguration
 from cstar.entrypoint.worker.worker import BlueprintRequest, JobConfig
 from cstar.orchestration.models import RomsMarblBlueprint
-from cstar.orchestration.orchestration import build_and_run
 from cstar.orchestration.serialization import deserialize
 
 app = typer.Typer()
-
-
-@app.command()
-def run(path: Path, name: str) -> None:
-    """The action handler for the workplan-run action."""
-    # TODO: load from ~/.cstar/config (e.g. cstar config init)
-    os.environ["CSTAR_INTERACTIVE"] = "0"
-    os.environ["CSTAR_ACCOUNT_KEY"] = "ees250129"
-    os.environ["CSTAR_QUEUE_NAME"] = "wholenode"
-    os.environ["CSTAR_ORCHESTRATED"] = "1"
-
-    os.environ["CSTAR_RUNID"] = name
-
-    build_and_run(path)
 
 
 @app.command()
