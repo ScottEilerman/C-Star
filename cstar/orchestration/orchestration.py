@@ -251,7 +251,16 @@ class WorkTask:
 
 @flow
 def build_and_run(wp_path: Path | str):
+
+    # all wp steps get tracked in three dicts here, where keys are always step.name
+    # the first maps step name to WorkTask
+    # the second maps step name to a prefect future for submit/launch
+    # the third maps step name to prefect future for the check step
+    # we'll use these to wire up step dependencies via futures
     tasks = {}
+    submissions = {}
+    checks = {}
+
     graph = nx.DiGraph()
 
     from cstar.orchestration.launch.slurm import SlurmLauncher
@@ -261,14 +270,13 @@ def build_and_run(wp_path: Path | str):
     workplan = deserialize(Path(wp_path), Workplan)
 
     # create all tasks first and add to graph
-    # collect tasks in dict too just for easy reference
     for step in workplan.steps:
         print(f"Making task for {step.name}")
         wt = WorkTask(step, launcher)
         tasks[step.name] = wt
         graph.add_node(wt)
 
-    # map step dependencies as task dependencies and add graph edges
+    # create worktask deps and graph edges based on wp step dependencies
     for name, t in tasks.items():
         for dep in t.step.depends_on:
             t.depends_on.append(tasks[dep])
@@ -276,9 +284,6 @@ def build_and_run(wp_path: Path | str):
         print(f"name: {name}, deps: {t.depends_on}")
 
     assert nx.is_directed_acyclic_graph(graph)
-
-    submissions = {}
-    checks = {}
 
     print(graph)
     print([t for t in nx.topological_sort(graph)])
