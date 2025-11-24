@@ -183,10 +183,12 @@ class WorkTask:
     @property
     def handle(self) -> ProcessHandle:
         if self._handle is None:
-            print(
-                f"no handle exists for {self.name}, likely it was launched previously and cached, or else sequencing has gone bad"
-            )
-            self._handle = self.launch()
+            try:
+                # we could hit this when restoring from cache, in which case self.launch will get the cached handle
+                # even if we pass None as the launcher
+                self._handle = self.launch(launcher=None)
+            except:
+                raise RuntimeError("Tried to access handle for {self.name} before it exists, and couldn't restore it from cache.")
         return self._handle
 
     @task(
