@@ -3,7 +3,7 @@ import shutil
 from enum import IntEnum, auto
 from pathlib import Path
 from time import sleep
-from typing import Generic, Protocol, TypeVar
+from typing import Generic, Protocol, TypeVar, Mapping
 
 import networkx as nx
 from prefect import flow, task
@@ -209,11 +209,10 @@ def clear_working_dir(step: Step):
 class WorkTask:
     """Manage execution and monitoring of a step via prefect tasks"""
 
-    def __init__(self, step: Step, launcher: Launcher):
+    def __init__(self, step: Step):
         self.step = step
         self.name = step.name
         self._handle: ProcessHandle | None = None
-        self.launcher = launcher
         self.depends_on: list[WorkTask] = []
 
     @property
@@ -228,9 +227,9 @@ class WorkTask:
     @task(
         persist_result=True, cache_key_fn=cache_func, task_run_name="launch-{self.name}"
     )
-    def launch(self):
+    def launch(self, launcher: Launcher):
         clear_working_dir(self.step)  # todo temporary
-        handle = self.launcher.launch(
+        handle = launcher.launch(
             self.step, dependencies=[dep.handle for dep in self.depends_on]
         )
         if self._handle is None:
@@ -240,75 +239,112 @@ class WorkTask:
     @task(
         persist_result=True, cache_key_fn=cache_func, task_run_name="check-{self.name}"
     )
-    def check(self):
+    def check(self, launcher: Launcher):
         while True:
-            status = self.launcher.query_status(self.step, self.handle)
+            status = launcher.query_status(self.step, self.handle)
             print(f"status of {self.name} is {status.name}")
             if Status.is_terminal(status):
                 return status
             sleep(15)
 
 
-@flow
+
+
 def build_and_run(wp_path: Path | str):
-
-    # all wp steps get tracked in three dicts here, where keys are always step.name
-    # the first maps step name to WorkTask
-    # the second maps step name to a prefect future for submit/launch
-    # the third maps step name to prefect future for the check step
-    # we'll use these to wire up step dependencies via futures
-    tasks = {}
-    submissions = {}
-    checks = {}
-
-    graph = nx.DiGraph()
 
     from cstar.orchestration.launch.slurm import SlurmLauncher
 
     launcher = SlurmLauncher()  # todo, figure out launcher from WP or env
 
-    workplan = deserialize(Path(wp_path), Workplan)
+    wp = deserialize(Path(wp_path), Workplan)
+    planner = Planner(wp)
+    orchestrator = Orchestrator(planner=planner, launcher=launcher)
+    orchestrator.run()
 
-    # create all tasks first and add to graph
-    for step in workplan.steps:
-        print(f"Making task for {step.name}")
-        wt = WorkTask(step, launcher)
-        tasks[step.name] = wt
-        graph.add_node(wt)
 
-    # create worktask deps and graph edges based on wp step dependencies
-    for name, t in tasks.items():
-        for dep in t.step.depends_on:
-            t.depends_on.append(tasks[dep])
-            graph.add_edge(tasks[dep], t)
-        print(f"name: {name}, deps: {t.depends_on}")
 
-    assert nx.is_directed_acyclic_graph(graph)
 
-    print(graph)
-    print([t for t in nx.topological_sort(graph)])
+class Planner:
+    """Identifies depdendencies of a workplan to produce an execution plan."""
 
-    # submit everything for execution with dependencies
-    # use topological sort so that we don't reference dependencies (from submissions dict or trying to get a handle)
-    # before they've been submitted.
-    # note: we could probably skip nx if we implemented our prefect tasks as transactional, but this is easier
-    # for now. see https://docs.prefect.io/v3/advanced/transactions#write-your-first-transaction
-    for t in nx.topological_sort(graph):
-        print(t)
-        print(f"launching {t.name}")
-        submissions[t.name] = t.launch.submit(
-            wait_for=[submissions[dep.name] for dep in t.depends_on]
-        )
+    workplan: Workplan
+    """The workplan to plan."""
 
-    # wait for all the slurm submissions to get set up before checking anything
-    wait(list(submissions.values()))
+    graph: nx.DiGraph
+    """The graph used for task planning."""
 
-    # create check tasks for every task, depending on their real dependencies and their own launch task
-    for t in nx.topological_sort(graph):
-        print(f"adding check task for {t.name} with handle {t.handle}")
-        checks[t.name] = t.check.submit(
-            wait_for=[submissions[t.name]] + [checks[dep.name] for dep in t.depends_on]
-        )
+    def __init__(
+        self,
+        workplan: Workplan,
+    ) -> None:
+        """Initialize the planner and build an execution graph.
 
-    # wait on all checks to finish
-    wait(list(checks.values()))
+        Parameters
+        ----------
+        workplan: Workplan
+            The workplan to be planned.
+        """
+
+
+        self.workplan = workplan
+
+        self._tasks = {}
+
+        # create all tasks first and add to graph
+        for step in workplan.steps:
+            print(f"Making task for {step.name}")
+            wt = WorkTask(step)
+            self._tasks[step.name] = wt
+            self.graph.add_node(wt)
+
+        # create worktask deps and graph edges based on wp step dependencies
+        for name, t in self._tasks.items():
+            for dep in t.step.depends_on:
+                t.depends_on.append(self._tasks[dep])
+                self.graph.add_edge(self._tasks[dep], t)
+            print(f"name: {name}, deps: {t.depends_on}")
+
+        assert nx.is_directed_acyclic_graph(self.graph)
+
+        print(self.graph)
+        print([t for t in nx.topological_sort(self.graph)])
+
+
+class Orchestrator:
+    def __init__(self, planner: Planner, launcher: Launcher):
+        self.planner = planner
+        self.launcher = launcher
+
+    @flow
+    def run(self):
+        # map step name to prefect futures for submission and check phases
+        submissions = {}
+        checks = {}
+
+
+        # submit everything for execution with dependencies
+        # use topological sort so that we don't reference dependencies (from submissions dict or trying to get a handle)
+        # before they've been submitted.
+        # note: we could probably skip nx if we implemented our prefect tasks as transactional, but this is easier
+        # for now. see https://docs.prefect.io/v3/advanced/transactions#write-your-first-transaction
+        for t in nx.topological_sort(self.planner.graph):
+            print(t)
+            print(f"launching {t.name}")
+            submissions[t.name] = t.launch.submit(self.launcher,
+                wait_for=[submissions[dep.name] for dep in t.depends_on]
+            )
+
+        # wait for all the slurm submissions to get set up before checking anything
+        wait(list(submissions.values()))
+
+        # create check tasks for every task, depending on their real dependencies and their own launch task
+        for t in nx.topological_sort(self.planner.graph):
+            print(f"adding check task for {t.name} with handle {t.handle}")
+            checks[t.name] = t.check.submit(self.launcher,
+                wait_for=[submissions[t.name]] + [checks[dep.name] for dep in t.depends_on]
+            )
+
+        # wait on all checks to finish
+        wait(list(checks.values()))
+
+
