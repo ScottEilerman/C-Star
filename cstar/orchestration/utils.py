@@ -44,6 +44,7 @@ def _add_marker_nodes(graph: nx.DiGraph) -> nx.DiGraph:
         A copy of the original graph with the entrypoint node inserted
     """
     graph = cast("nx.DiGraph", graph.copy())
+    nx.set_node_attributes(graph, "task", "action")
 
     if START_NODE not in graph.nodes:
         graph.add_node(
@@ -82,23 +83,6 @@ def _add_marker_nodes(graph: nx.DiGraph) -> nx.DiGraph:
     graph.add_edges_from(terminal_edges)
 
     return graph
-
-
-def _initialize_from_graph(
-    workplan: Workplan, graph: nx.DiGraph
-) -> tuple[nx.DiGraph, dict, dict, dict]:
-    """Prepare instance from the supplied graph."""
-    step_map = {step.name: step for step in workplan.steps}
-    dep_map = {
-        step.name: [s.name for s in workplan.steps if step.name in s.depends_on]
-        for step in workplan.steps
-    }
-    name_map = {step.name: step.name for step in workplan.steps}
-    name_map.update({START_NODE: "start", TERMINAL_NODE: "end"})
-
-    nx.set_node_attributes(graph, "task", "action")
-    graph = _add_marker_nodes(graph)
-    return graph, step_map, dep_map, name_map
 
 
 def _create_color_map(
@@ -157,7 +141,7 @@ def render(
 
     Parameters
     ----------
-    graph : nx.DiGraph
+    planner : Planner
         The graph to render
     image_directory : Path
         The directory to render the file to
@@ -175,7 +159,9 @@ def render(
     plt.cla()
     plt.clf()
 
-    graph, *_, name_map = _initialize_from_graph(planner.workplan, planner.graph)
+    graph = _add_marker_nodes(planner.graph)
+    name_map = {v: k for k, v in planner._tasks.items()}
+    name_map.update({START_NODE: "start", TERMINAL_NODE: "end"})
     color_map = _create_color_map()
 
     if START_NODE not in graph:

@@ -290,6 +290,8 @@ class Planner:
 
         self._tasks = {}
 
+        self.graph = nx.DiGraph()
+
         # create all tasks first and add to graph
         for step in workplan.steps:
             print(f"Making task for {step.name}")
