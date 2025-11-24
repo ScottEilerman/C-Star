@@ -5,8 +5,10 @@ from typing import Literal, cast
 import networkx as nx
 from matplotlib import pyplot as plt
 
-from cstar.orchestration.models import Workplan
 from cstar.orchestration.orchestration import Planner
+
+START_NODE: Literal["_cs_start_"] = "_cs_start_"
+TERMINAL_NODE: Literal["_cs_term_"] = "_cs_term_"
 
 
 def slugify(source: str) -> str:
@@ -26,10 +28,6 @@ def slugify(source: str) -> str:
         raise ValueError
 
     return re.sub(r"\s+", "-", source.casefold())
-
-
-START_NODE: Literal["_cs_start_"] = "_cs_start_"
-TERMINAL_NODE: Literal["_cs_term_"] = "_cs_term_"
 
 
 def _add_marker_nodes(graph: nx.DiGraph) -> nx.DiGraph:
@@ -161,7 +159,7 @@ def render(
 
     graph = _add_marker_nodes(planner.graph)
     name_map = {v: k for k, v in planner._tasks.items()}
-    name_map.update({START_NODE: "start", TERMINAL_NODE: "end"})
+    name_map.update({START_NODE: "start", TERMINAL_NODE: "end"})  # type: ignore[dict-item]
     color_map = _create_color_map()
 
     if START_NODE not in graph:

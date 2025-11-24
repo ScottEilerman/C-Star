@@ -17,7 +17,6 @@ from cstar.orchestration.orchestration import (
     Launcher,
     ProcessHandle,
     Status,
-    Task,
 )
 from cstar.orchestration.serialization import deserialize
 from cstar.orchestration.utils import slugify
@@ -232,7 +231,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         return handle
 
     @classmethod
-    def query_status(cls, step: Step, item: Task[SlurmHandle] | SlurmHandle) -> Status:
+    def query_status(cls, step: Step, item: SlurmHandle) -> Status:
         """Retrieve the status of an item.
 
         Parameters
@@ -247,7 +246,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         Status
             The current status of the item.
         """
-        handle = item.handle if isinstance(item, Task) else item
+        handle = item
         slurm_status = SlurmLauncher._status(step, handle)
 
         print(f"SLURM job `{handle.pid}` status is `{slurm_status}`")
@@ -269,7 +268,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         return Status.Unsubmitted
 
     @classmethod
-    async def cancel(cls, item: Task[SlurmHandle]) -> Task[SlurmHandle]:
+    def cancel(cls, item: SlurmHandle) -> SlurmHandle:
         """Cancel a task, if possible.
 
         Parameters
@@ -282,7 +281,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         Task[SlurmHandle]
             The task after the cancellation attempt has completed.
         """
-        handle = item.handle
+        handle = item
 
         try:
             _run_cmd(

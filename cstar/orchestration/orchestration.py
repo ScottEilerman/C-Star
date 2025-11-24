@@ -3,7 +3,7 @@ import shutil
 from enum import IntEnum, auto
 from pathlib import Path
 from time import sleep
-from typing import Generic, Protocol, TypeVar, Mapping
+from typing import Generic, Protocol, TypeVar
 
 import networkx as nx
 from prefect import flow, task
@@ -97,41 +97,6 @@ class Status(IntEnum):
 
 _THandle = TypeVar("_THandle", bound=ProcessHandle)
 
-
-class Task(Generic[_THandle]):
-    """A task represents a live-execution of a step."""
-
-    status: Status
-    """Current task status."""
-
-    step: Step
-    """The step containing task configuration."""
-
-    handle: _THandle
-    """The unique process identifier for the task."""
-
-    def __init__(
-        self,
-        step: Step,
-        handle: _THandle,
-        status: Status = Status.Unsubmitted,
-    ) -> None:
-        """Initialize the Task record.
-
-        Parameters
-        ----------
-        step : Step
-            The workplan `Step` that triggered the task to run
-        handle : _THandle
-            A handle that used to identify the running task.
-        status : Status
-            The current status of the task
-        """
-        self.status = status
-        self.step = step
-        self.handle = handle
-
-
 _TValue = TypeVar("_TValue")
 
 
@@ -139,7 +104,7 @@ class Launcher(Protocol, Generic[_THandle]):
     """Contract required to implement a task launcher."""
 
     @classmethod
-    def launch(cls, step: Step, dependencies: list[_THandle]) -> Task[_THandle]:
+    def launch(cls, step: Step, dependencies: list[_THandle]) -> ProcessHandle:
         """Launch a process for a step.
 
         Parameters
@@ -155,7 +120,7 @@ class Launcher(Protocol, Generic[_THandle]):
         ...
 
     @classmethod
-    def query_status(cls, step: Step, item: Task[_THandle] | _THandle) -> Status:
+    def query_status(cls, step: Step, item: ProcessHandle) -> Status:
         """Retrieve the current status for a running task.
 
         Parameters
@@ -171,7 +136,7 @@ class Launcher(Protocol, Generic[_THandle]):
         ...
 
     @classmethod
-    def cancel(cls, item: Task[_THandle]) -> Task[_THandle]:
+    def cancel(cls, item: ProcessHandle) -> ProcessHandle:
         """Cancel a task, if possible.
 
         Parameters
@@ -248,10 +213,7 @@ class WorkTask:
             sleep(15)
 
 
-
-
 def build_and_run(wp_path: Path | str):
-
     from cstar.orchestration.launch.slurm import SlurmLauncher
 
     launcher = SlurmLauncher()  # todo, figure out launcher from WP or env
@@ -260,8 +222,6 @@ def build_and_run(wp_path: Path | str):
     planner = Planner(wp)
     orchestrator = Orchestrator(planner=planner, launcher=launcher)
     orchestrator.run()
-
-
 
 
 class Planner:
@@ -284,8 +244,6 @@ class Planner:
         workplan: Workplan
             The workplan to be planned.
         """
-
-
         self.workplan = workplan
 
         self._tasks = {}
@@ -323,7 +281,6 @@ class Orchestrator:
         submissions = {}
         checks = {}
 
-
         # submit everything for execution with dependencies
         # use topological sort so that we don't reference dependencies (from submissions dict or trying to get a handle)
         # before they've been submitted.
@@ -332,8 +289,8 @@ class Orchestrator:
         for t in nx.topological_sort(self.planner.graph):
             print(t)
             print(f"launching {t.name}")
-            submissions[t.name] = t.launch.submit(self.launcher,
-                wait_for=[submissions[dep.name] for dep in t.depends_on]
+            submissions[t.name] = t.launch.submit(
+                self.launcher, wait_for=[submissions[dep.name] for dep in t.depends_on]
             )
 
         # wait for all the slurm submissions to get set up before checking anything
@@ -342,11 +299,11 @@ class Orchestrator:
         # create check tasks for every task, depending on their real dependencies and their own launch task
         for t in nx.topological_sort(self.planner.graph):
             print(f"adding check task for {t.name} with handle {t.handle}")
-            checks[t.name] = t.check.submit(self.launcher,
-                wait_for=[submissions[t.name]] + [checks[dep.name] for dep in t.depends_on]
+            checks[t.name] = t.check.submit(
+                self.launcher,
+                wait_for=[submissions[t.name]]
+                + [checks[dep.name] for dep in t.depends_on],
             )
 
         # wait on all checks to finish
         wait(list(checks.values()))
-
-
