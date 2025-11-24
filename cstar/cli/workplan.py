@@ -5,8 +5,9 @@ from typing import Annotated
 import typer
 
 from cstar.orchestration.models import Workplan
-from cstar.orchestration.orchestration import build_and_run
+from cstar.orchestration.orchestration import Planner, build_and_run
 from cstar.orchestration.serialization import deserialize
+from cstar.orchestration.utils import render
 
 app = typer.Typer()
 
@@ -44,6 +45,28 @@ def check(
         print(f"workplan {path} is valid")
     except ValueError as ex:
         print(f"Error occurred: {ex}")
+
+
+@app.command()
+def plan(path: Path, output_dir: Path = Path.cwd()) -> None:
+    out_file = None
+    try:
+        if workplan := deserialize(path, Workplan):
+            planner = Planner(workplan)
+            out_file = render(
+                planner,
+                output_dir,
+            )
+        else:
+            print(f"The workplan at `{path}` could not be loaded")
+
+    except ValueError as ex:
+        print(f"Error occurred: {ex}")
+
+    if out_file is None:
+        raise ValueError("Unable to generate plan")
+
+    print(f"The plan has been generated and stored at: {out_file}")
 
 
 if __name__ == "__main__":
