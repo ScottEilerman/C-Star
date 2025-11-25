@@ -3,6 +3,7 @@ import datetime
 import random
 from multiprocessing import Process as MpProcess
 from subprocess import run as sprun
+from time import sleep
 
 from psutil import NoSuchProcess
 from psutil import Process as PsProcess
@@ -86,7 +87,7 @@ class LocalLauncher(Launcher[LocalHandle]):
     #     ...
 
     @staticmethod
-    async def _submit(step: Step, dependencies: list[LocalHandle]) -> LocalHandle:
+    def _submit(step: Step, dependencies: list[LocalHandle]) -> LocalHandle:
         """Submit a step to SLURM as a new batch allocation.
 
         Parameters
@@ -136,7 +137,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         raise RuntimeError("Unable to retrieve process ID for local process.")
 
     @staticmethod
-    async def _status(step: Step, handle: LocalHandle) -> str:
+    def _status(step: Step, handle: LocalHandle) -> str:
         """Retrieve the status of a step running in local process.
 
         Parameters
@@ -151,7 +152,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         str
             The current status of the step.
         """
-        # await LocalLauncher._update_processes()
+        # LocalLauncher._update_processes()
         rc = handle.process.exitcode
 
         print(f"Return code for pid `{handle.pid}` is `{rc}` for `{step.name}`")
@@ -166,7 +167,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         return status
 
     @classmethod
-    async def launch(cls, step: Step, dependencies: list[LocalHandle]) -> Task:
+    def launch(cls, step: Step, dependencies: list[LocalHandle]) -> Task:
         """Launch a step in local process.
 
         Parameters
@@ -182,16 +183,16 @@ class LocalLauncher(Launcher[LocalHandle]):
             A Task containing information about the newly submitted job.
         """
         tasks = [asyncio.Task(cls.query_status(h.step, h)) for h in dependencies]
-        statuses = await asyncio.gather(*tasks)
+        statuses = asyncio.gather(*tasks)
         active_found = any(map(Status.is_running, statuses))
         failure_found = any(map(Status.is_failure, statuses))
 
         # wait for the dependencies to complete before launching
         while active_found and not failure_found:
-            await asyncio.sleep(1)
+            sleep(1)
 
             tasks = [asyncio.Task(cls.query_status(h.step, h)) for h in dependencies]
-            statuses = await asyncio.gather(*tasks)
+            statuses = asyncio.gather(*tasks)
             active_found = any(map(Status.is_running, statuses))
             failure_found = any(map(Status.is_failure, statuses))
 
@@ -200,7 +201,7 @@ class LocalLauncher(Launcher[LocalHandle]):
                 f"Dependency of step {step.name} failed. Unable to continue."
             )
 
-        handle = await LocalLauncher._submit(step, dependencies)
+        handle = LocalLauncher._submit(step, dependencies)
         return Task(
             status=Status.Submitted,
             step=step,
@@ -208,7 +209,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         )
 
     @classmethod
-    async def query_status(
+    def query_status(
         cls, step: Step, item: Task[LocalHandle] | LocalHandle
     ) -> Status:
         """Retrieve the status of an item.
@@ -226,7 +227,7 @@ class LocalLauncher(Launcher[LocalHandle]):
             The current status of the item.
         """
         handle = item.handle if isinstance(item, Task) else item
-        raw_status = await LocalLauncher._status(step, handle)
+        raw_status = LocalLauncher._status(step, handle)
         if raw_status in ["PENDING", "RUNNING", "ENDING"]:
             return Status.Running
         if raw_status in ["COMPLETED", "FAILED"]:
@@ -239,7 +240,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         return Status.Unsubmitted
 
     @classmethod
-    async def cancel(cls, item: Task[LocalHandle]) -> Task[LocalHandle]:
+    def cancel(cls, item: Task[LocalHandle]) -> Task[LocalHandle]:
         """Cancel a task, if possible.
 
         Parameters
