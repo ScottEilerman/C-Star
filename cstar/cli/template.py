@@ -1,13 +1,19 @@
-import argparse
 import json
 import textwrap
-import typing as t
+from enum import StrEnum, auto
 from pathlib import Path
+from typing import Annotated
 
-from cstar.cli.core import PathConverterAction, RegistryResult, cli_activity
+import typer
+
 from cstar.orchestration.models import RomsMarblBlueprint, Workplan
 
-TemplateTypes: t.TypeAlias = t.Literal["workplan", "blueprint"]
+app = typer.Typer()
+
+
+class TemplateTypes(StrEnum):
+    blueprint = auto()
+    workplan = auto()
 
 
 def check_or_create_path(path: Path | None, interactive: bool = False) -> None:
@@ -106,7 +112,7 @@ def replace_schema_directive(template_content: str, schema_path: Path | None) ->
     return "\n".join(template_lines)
 
 
-async def generate_template(path: Path | None, template_type: TemplateTypes) -> str:
+def generate_template(path: Path | None, template_type: TemplateTypes) -> str:
     """The action handler for the template-create action.
 
     Triggers creation of a sample template.
@@ -131,11 +137,7 @@ async def generate_template(path: Path | None, template_type: TemplateTypes) -> 
     subdir = "wp" if template_type == "workplan" else "bp"
 
     # manually locate dir; use of cstar sys_mgr results in circular reference
-    fp = (
-        Path(__file__).parent.parent.parent.parent
-        / "additional_files/templates"
-        / subdir
-    )
+    fp = Path(__file__).parent.parent / "additional_files/templates" / subdir
     tpl_source_path = fp / tpl_name
 
     if not tpl_source_path.exists():
@@ -173,61 +175,19 @@ async def generate_template(path: Path | None, template_type: TemplateTypes) -> 
     return message
 
 
-async def handle(ns: argparse.Namespace) -> None:
-    """The action handler for the template-create action.
-
-    Triggers creation of a sample template.
-
-    Parameters
-    ----------
-    ns : argparse.Namespace
-        User inputs parsed by the CLI
-    """
-    msg = await generate_template(ns.path, ns.type)
+@app.command()
+def create(
+    out: Annotated[
+        Path | None,
+        typer.Argument(
+            help="Output path for the blueprint. If not provided, "
+            "the template is written to stdout."
+        ),
+    ] = None,
+    type: Annotated[
+        TemplateTypes, typer.Option(help="The template type to create")
+    ] = TemplateTypes.workplan,
+):
+    """Generate an empty template."""
+    msg = generate_template(out, type)
     print(msg)
-
-
-@cli_activity
-def create_action() -> RegistryResult:
-    """Integrate the blueprint-template command into the CLI.
-
-    Returns
-    -------
-    RegistryResult
-        A 2-tuple containing ((command name, action name), parser function)
-    """
-    command: t.Literal["template"] = "template"
-    action: t.Literal["create"] = "create"
-
-    def _fn(sp: argparse._SubParsersAction) -> argparse.ArgumentParser:
-        """Add a parser for the command: `cstar template create -o path/to/output.yaml` -t workplan"""
-        parser: argparse.ArgumentParser = sp.add_parser(
-            action,
-            help="Generate an empty template.",
-            description="Generate an empty template.",
-        )
-        parser.add_argument(
-            "-o",
-            "--output",
-            dest="path",
-            help=(
-                "Output path for the blueprint. If not provided, "
-                "the template is written to stdout."
-            ),
-            required=False,
-            default=None,
-            action=PathConverterAction,
-        )
-        parser.add_argument(
-            "-t",
-            "--type",
-            dest="type",
-            help=("The template type to create."),
-            required=True,
-            choices=["blueprint", "workplan"],
-        )
-        parser.set_defaults(template=action)
-        parser.set_defaults(handler=handle)
-        return parser
-
-    return (command, action), _fn

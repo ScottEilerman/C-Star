@@ -3,7 +3,7 @@ import os
 import platform
 from pathlib import Path
 
-from dotenv import dotenv_values, set_key
+from dotenv import dotenv_values
 
 from cstar.base.utils import _run_cmd
 
@@ -74,7 +74,7 @@ class CStarEnvironment:
         self._mpi_exec_prefix = mpi_exec_prefix
         self._compiler = compiler
         self._PACKAGE_ROOT: Path = self._find_package_root()
-        self._CSTAR_USER_ENV_PATH = Path("~/.cstar.env").expanduser()
+        # self._CSTAR_USER_ENV_PATH = Path("~/.cstar.env").expanduser()
         self._env_vars = self._load_env()
 
         if self.uses_lmod:
@@ -135,8 +135,8 @@ class CStarEnvironment:
             The variables that were loaded
         """
         env_vars = dotenv_values(self.system_env_path)
-        user_env_vars = dotenv_values(self.user_env_path)
-        env_vars.update(user_env_vars)
+        # user_env_vars = dotenv_values(self.user_env_path)
+        # env_vars.update(user_env_vars)
 
         env_vars = {k: v for k, v in env_vars.items() if v is not None}
         os.environ.update(env_vars)
@@ -207,16 +207,16 @@ class CStarEnvironment:
         """
         return (platform.system() == "Linux") and ("LMOD_CMD" in list(os.environ))
 
-    @property
-    def user_env_path(self) -> Path:
-        """Identify the expected path to a .env file for the current user.
+    # @property
+    # def user_env_path(self) -> Path:
+    #     """Identify the expected path to a .env file for the current user.
 
-        Returns
-        -------
-        Path
-            The path to the `.env` file.
-        """
-        return self._CSTAR_USER_ENV_PATH
+    #     Returns
+    #     -------
+    #     Path
+    #         The path to the `.env` file.
+    #     """
+    #     return self._CSTAR_USER_ENV_PATH
 
     @property
     def system_env_path(self) -> Path:
@@ -340,5 +340,6 @@ class CStarEnvironment:
         value : str
             The value to set for the environment variable.
         """
-        set_key(self.user_env_path, key, value)
+        # set_key(self.user_env_path, key, value)
+        os.environ[key] = value
         self._env_vars = self._load_env()

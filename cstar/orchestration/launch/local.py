@@ -1,8 +1,10 @@
 import asyncio
 import datetime
-import random
+import os
+import shlex
 from multiprocessing import Process as MpProcess
 from subprocess import run as sprun
+from time import sleep
 
 from psutil import NoSuchProcess
 from psutil import Process as PsProcess
@@ -13,7 +15,7 @@ from cstar.orchestration.orchestration import (
     Launcher,
     ProcessHandle,
     Status,
-    Task,
+    app_to_cmd_map,
 )
 from cstar.orchestration.utils import slugify
 
@@ -86,7 +88,7 @@ class LocalLauncher(Launcher[LocalHandle]):
     #     ...
 
     @staticmethod
-    async def _submit(step: Step, dependencies: list[LocalHandle]) -> LocalHandle:
+    def _submit(step: Step, dependencies: list[LocalHandle]) -> LocalHandle:
         """Submit a step to SLURM as a new batch allocation.
 
         Parameters
@@ -101,14 +103,22 @@ class LocalLauncher(Launcher[LocalHandle]):
         LocalHandle | None
             A ProcessHandle identifying the newly submitted job.
         """
-        cmd = ["sleep", str(random.randint(1, 4))]
-        print(f"Creating local process from cmd: {' '.join(cmd)}")
+        step_converter = app_to_cmd_map[step.application]
+        if converter_override := os.getenv("CSTAR_CMD_CONVERTER_OVERRIDE", ""):
+            print(
+                f"Overriding command converter for `{step.application}` to `{converter_override}`"
+            )
+            step_converter = app_to_cmd_map[converter_override]
+
+        command = shlex.split(step_converter(step))
+
+        print(f"Creating local process from cmd: {' '.join(command)}")
 
         try:
             mp_process = MpProcess(
                 target=run_as_process,
                 name=slugify(step.name),
-                args=(step, cmd),
+                args=(step, command),
                 daemon=True,
             )
             mp_process.start()
@@ -136,7 +146,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         raise RuntimeError("Unable to retrieve process ID for local process.")
 
     @staticmethod
-    async def _status(step: Step, handle: LocalHandle) -> str:
+    def _status(step: Step, handle: LocalHandle) -> str:
         """Retrieve the status of a step running in local process.
 
         Parameters
@@ -151,7 +161,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         str
             The current status of the step.
         """
-        # await LocalLauncher._update_processes()
+        # LocalLauncher._update_processes()
         rc = handle.process.exitcode
 
         print(f"Return code for pid `{handle.pid}` is `{rc}` for `{step.name}`")
@@ -166,7 +176,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         return status
 
     @classmethod
-    async def launch(cls, step: Step, dependencies: list[LocalHandle]) -> Task:
+    def launch(cls, step: Step, dependencies: list[LocalHandle]) -> LocalHandle:
         """Launch a step in local process.
 
         Parameters
@@ -181,36 +191,32 @@ class LocalLauncher(Launcher[LocalHandle]):
         Task[LocalHandle]
             A Task containing information about the newly submitted job.
         """
+        # asyncio.run(cls.wait_for_deps(dependencies, step))
+
+        handle = LocalLauncher._submit(step, dependencies)
+        return handle
+
+    @classmethod
+    async def wait_for_deps(cls, dependencies, step):
         tasks = [asyncio.Task(cls.query_status(h.step, h)) for h in dependencies]
-        statuses = await asyncio.gather(*tasks)
+        statuses = asyncio.gather(*tasks)
         active_found = any(map(Status.is_running, statuses))
         failure_found = any(map(Status.is_failure, statuses))
-
         # wait for the dependencies to complete before launching
         while active_found and not failure_found:
-            await asyncio.sleep(1)
+            sleep(1)
 
             tasks = [asyncio.Task(cls.query_status(h.step, h)) for h in dependencies]
-            statuses = await asyncio.gather(*tasks)
+            statuses = asyncio.gather(*tasks)
             active_found = any(map(Status.is_running, statuses))
             failure_found = any(map(Status.is_failure, statuses))
-
         if failure_found:
             raise CstarExpectationFailed(
                 f"Dependency of step {step.name} failed. Unable to continue."
             )
 
-        handle = await LocalLauncher._submit(step, dependencies)
-        return Task(
-            status=Status.Submitted,
-            step=step,
-            handle=handle,
-        )
-
     @classmethod
-    async def query_status(
-        cls, step: Step, item: Task[LocalHandle] | LocalHandle
-    ) -> Status:
+    def query_status(cls, step: Step, item: LocalHandle) -> Status:
         """Retrieve the status of an item.
 
         Parameters
@@ -225,8 +231,8 @@ class LocalLauncher(Launcher[LocalHandle]):
         Status
             The current status of the item.
         """
-        handle = item.handle if isinstance(item, Task) else item
-        raw_status = await LocalLauncher._status(step, handle)
+        handle = item
+        raw_status = LocalLauncher._status(step, handle)
         if raw_status in ["PENDING", "RUNNING", "ENDING"]:
             return Status.Running
         if raw_status in ["COMPLETED", "FAILED"]:
@@ -239,7 +245,7 @@ class LocalLauncher(Launcher[LocalHandle]):
         return Status.Unsubmitted
 
     @classmethod
-    async def cancel(cls, item: Task[LocalHandle]) -> Task[LocalHandle]:
+    def cancel(cls, item: LocalHandle) -> LocalHandle:
         """Cancel a task, if possible.
 
         Parameters

@@ -1,9 +1,8 @@
 import os
-import sys
 import typing as t
+from datetime import datetime
 from pathlib import Path
 
-from prefect import task
 from prefect.context import TaskRunContext
 
 from cstar.base.utils import _run_cmd
@@ -12,12 +11,12 @@ from cstar.execution.scheduler_job import (
     create_scheduler_job,
     get_status_of_slurm_job,
 )
-from cstar.orchestration.models import Application, RomsMarblBlueprint, Step
+from cstar.orchestration.models import RomsMarblBlueprint, Step
 from cstar.orchestration.orchestration import (
     Launcher,
     ProcessHandle,
     Status,
-    Task,
+    app_to_cmd_map,
 )
 from cstar.orchestration.serialization import deserialize
 from cstar.orchestration.utils import slugify
@@ -38,6 +37,7 @@ def cache_key_func(context: TaskRunContext, params: dict[str, t.Any]) -> str:
     str
         The cache key for the current context.
     """
+    print(params)
     cache_key = f"{os.getenv('CSTAR_RUNID')}_{params['step'].name}_{context.task.name}"
     print(f"Cache check: {cache_key}")
     return cache_key
@@ -63,74 +63,11 @@ class SlurmHandle(ProcessHandle):
         self.job_name = job_name
 
 
-StepToCommandConversionFn: t.TypeAlias = t.Callable[[Step], str]
-"""Convert a `Step` into a command to be executed.
-
-Parameters
-----------
-step : Step
-    The step to be converted.
-
-Returns
--------
-str
-    The complete CLI command.
-"""
-
-
-def convert_roms_step_to_command(step: Step) -> str:
-    """Convert a `Step` into a command to be executed.
-
-    This function converts ROMS/ROMS-MARBL applications into a command triggering
-    a C-Star worker to run a simulation.
-
-    Parameters
-    ----------
-    step : Step
-        The step to be converted.
-
-    Returns
-    -------
-    str
-        The complete CLI command.
-    """
-    bp_path = Path(step.blueprint).as_posix()
-    return f"{sys.executable} -m cstar.entrypoint.worker.worker -b {bp_path}"
-
-
-def convert_step_to_placeholder(step: Step) -> str:
-    """Convert a `Step` into a command to be executed.
-
-    This function converts applications into mocks by starting a process that
-    executes a blocking sleep.
-
-    Parameters
-    ----------
-    step : Step
-        The step to be converted.
-
-    Returns
-    -------
-    str
-        The complete CLI command.
-    """
-    return f'{sys.executable} -c "import time; time.sleep(10)"'
-
-
-app_to_cmd_map: dict[str, StepToCommandConversionFn] = {
-    Application.ROMS.value: convert_roms_step_to_command,
-    Application.ROMS_MARBL.value: convert_roms_step_to_command,
-    "sleep": convert_step_to_placeholder,
-}
-"""Map application types to a function that converts a step to a CLI command."""
-
-
 class SlurmLauncher(Launcher[SlurmHandle]):
     """A launcher that executes steps in a SLURM-enabled cluster."""
 
-    @task(persist_result=True, cache_key_fn=cache_key_func)
     @staticmethod
-    async def _submit(step: Step, dependencies: list[SlurmHandle]) -> SlurmHandle:
+    def _submit(step: Step, dependencies: list[SlurmHandle]) -> SlurmHandle:
         """Submit a step to SLURM as a new batch allocation.
 
         Parameters
@@ -158,13 +95,17 @@ class SlurmLauncher(Launcher[SlurmHandle]):
             step_converter = app_to_cmd_map[converter_override]
 
         command = step_converter(step)
+        script_path = (
+            Path.cwd()
+            / f"cstar_{step.name}_{datetime.strftime(datetime.now(), '%Y%m%d_%H%M%S')}.sh"
+        )  # todo, run-id, etc.
         job = create_scheduler_job(
             commands=command,
             account_key=os.getenv("CSTAR_ACCOUNT_KEY", ""),
             cpus=bp.cpus_needed,
             nodes=None,  # let existing logic handle this
             cpus_per_node=None,  # let existing logic handle this
-            script_path=None,  # puts it in current dir
+            script_path=script_path,  # puts it in current dir
             run_path=bp.runtime_params.output_dir,
             job_name=job_name,
             output_file=None,  # to fill with some convention
@@ -185,7 +126,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         raise RuntimeError(f"Unable to retrieve scheduled job ID for: {step.name}")
 
     @staticmethod
-    async def _status(step: Step, handle: SlurmHandle) -> ExecutionStatus:
+    def _status(step: Step, handle: SlurmHandle) -> ExecutionStatus:
         """Retrieve the status of a step running in SLURM.
 
         Parameters
@@ -209,9 +150,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         return status
 
     @classmethod
-    async def launch(
-        cls, step: Step, dependencies: list[SlurmHandle]
-    ) -> Task[SlurmHandle]:
+    def launch(cls, step: Step, dependencies: list[SlurmHandle]) -> SlurmHandle:
         """Launch a step in SLURM.
 
         Parameters
@@ -226,17 +165,11 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         Task[SlurmHandle]
             A Task containing information about the newly submitted job.
         """
-        handle = await SlurmLauncher._submit(step, dependencies)
-        return Task(
-            status=Status.Submitted,
-            step=step,
-            handle=handle,
-        )
+        handle = SlurmLauncher._submit(step, dependencies)
+        return handle
 
     @classmethod
-    async def query_status(
-        cls, step: Step, item: Task[SlurmHandle] | SlurmHandle
-    ) -> Status:
+    def query_status(cls, step: Step, item: SlurmHandle) -> Status:
         """Retrieve the status of an item.
 
         Parameters
@@ -251,8 +184,8 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         Status
             The current status of the item.
         """
-        handle = item.handle if isinstance(item, Task) else item
-        slurm_status = await SlurmLauncher._status(step, handle)
+        handle = item
+        slurm_status = SlurmLauncher._status(step, handle)
 
         print(f"SLURM job `{handle.pid}` status is `{slurm_status}`")
 
@@ -273,7 +206,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         return Status.Unsubmitted
 
     @classmethod
-    async def cancel(cls, item: Task[SlurmHandle]) -> Task[SlurmHandle]:
+    def cancel(cls, item: SlurmHandle) -> SlurmHandle:
         """Cancel a task, if possible.
 
         Parameters
@@ -286,7 +219,7 @@ class SlurmLauncher(Launcher[SlurmHandle]):
         Task[SlurmHandle]
             The task after the cancellation attempt has completed.
         """
-        handle = item.handle
+        handle = item
 
         try:
             _run_cmd(
