@@ -188,7 +188,9 @@ class WorkTask:
                 # even if we pass None as the launcher
                 self._handle = self.launch(launcher=None)
             except:
-                raise RuntimeError("Tried to access handle for {self.name} before it exists, and couldn't restore it from cache.")
+                raise RuntimeError(
+                    "Tried to access handle for {self.name} before it exists, and couldn't restore it from cache."
+                )
         return self._handle
 
     @task(
