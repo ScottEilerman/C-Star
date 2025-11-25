@@ -1,5 +1,4 @@
 import os
-import sys
 import typing as t
 from datetime import datetime
 from pathlib import Path
@@ -12,11 +11,12 @@ from cstar.execution.scheduler_job import (
     create_scheduler_job,
     get_status_of_slurm_job,
 )
-from cstar.orchestration.models import Application, RomsMarblBlueprint, Step
+from cstar.orchestration.models import RomsMarblBlueprint, Step
 from cstar.orchestration.orchestration import (
     Launcher,
     ProcessHandle,
     Status,
+    app_to_cmd_map,
 )
 from cstar.orchestration.serialization import deserialize
 from cstar.orchestration.utils import slugify
@@ -61,68 +61,6 @@ class SlurmHandle(ProcessHandle):
         """
         super().__init__(pid=job_id)
         self.job_name = job_name
-
-
-StepToCommandConversionFn: t.TypeAlias = t.Callable[[Step], str]
-"""Convert a `Step` into a command to be executed.
-
-Parameters
-----------
-step : Step
-    The step to be converted.
-
-Returns
--------
-str
-    The complete CLI command.
-"""
-
-
-def convert_roms_step_to_command(step: Step) -> str:
-    """Convert a `Step` into a command to be executed.
-
-    This function converts ROMS/ROMS-MARBL applications into a command triggering
-    a C-Star worker to run a simulation.
-
-    Parameters
-    ----------
-    step : Step
-        The step to be converted.
-
-    Returns
-    -------
-    str
-        The complete CLI command.
-    """
-    bp_path = Path(step.blueprint).as_posix()
-    return f"{sys.executable} -m cstar.entrypoint.worker.worker -b {bp_path}"
-
-
-def convert_step_to_placeholder(step: Step) -> str:
-    """Convert a `Step` into a command to be executed.
-
-    This function converts applications into mocks by starting a process that
-    executes a blocking sleep.
-
-    Parameters
-    ----------
-    step : Step
-        The step to be converted.
-
-    Returns
-    -------
-    str
-        The complete CLI command.
-    """
-    return f'{sys.executable} -c "import time; time.sleep(10)"'
-
-
-app_to_cmd_map: dict[str, StepToCommandConversionFn] = {
-    Application.ROMS.value: convert_roms_step_to_command,
-    Application.ROMS_MARBL.value: convert_roms_step_to_command,
-    "sleep": convert_step_to_placeholder,
-}
-"""Map application types to a function that converts a step to a CLI command."""
 
 
 class SlurmLauncher(Launcher[SlurmHandle]):

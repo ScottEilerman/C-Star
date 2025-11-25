@@ -1,17 +1,80 @@
 import os
 import shutil
-from enum import IntEnum, auto
+import sys
+from collections.abc import Callable
+from enum import IntEnum, StrEnum, auto
 from pathlib import Path
 from time import sleep
-from typing import Generic, Protocol, TypeVar
+from typing import Generic, Protocol, TypeAlias, TypeVar
 
 import networkx as nx
 from prefect import flow, task
 from prefect.context import TaskRunContext
 from prefect.futures import wait
 
-from cstar.orchestration.models import RomsMarblBlueprint, Step, Workplan
+from cstar.orchestration.models import Application, RomsMarblBlueprint, Step, Workplan
 from cstar.orchestration.serialization import deserialize
+
+
+def convert_roms_step_to_command(step: Step) -> str:
+    """Convert a `Step` into a command to be executed.
+
+    This function converts ROMS/ROMS-MARBL applications into a command triggering
+    a C-Star worker to run a simulation.
+
+    Parameters
+    ----------
+    step : Step
+        The step to be converted.
+
+    Returns
+    -------
+    str
+        The complete CLI command.
+    """
+    bp_path = Path(step.blueprint).as_posix()
+    return f"{sys.executable} -m cstar.entrypoint.worker.worker -b {bp_path}"
+
+
+def convert_step_to_placeholder(step: Step) -> str:
+    """Convert a `Step` into a command to be executed.
+
+    This function converts applications into mocks by starting a process that
+    executes a blocking sleep.
+
+    Parameters
+    ----------
+    step : Step
+        The step to be converted.
+
+    Returns
+    -------
+    str
+        The complete CLI command.
+    """
+    return f'{sys.executable} -c "import time; time.sleep(10)"'
+
+
+StepToCommandConversionFn: TypeAlias = Callable[[Step], str]
+"""Convert a `Step` into a command to be executed.
+
+Parameters
+----------
+step : Step
+    The step to be converted.
+
+Returns
+-------
+str
+    The complete CLI command.
+"""
+
+app_to_cmd_map: dict[str, StepToCommandConversionFn] = {
+    Application.ROMS.value: convert_roms_step_to_command,
+    Application.ROMS_MARBL.value: convert_roms_step_to_command,
+    "sleep": convert_step_to_placeholder,
+}
+"""Map application types to a function that converts a step to a CLI command."""
 
 
 class ProcessHandle:
@@ -152,6 +215,22 @@ class Launcher(Protocol, Generic[_THandle]):
         ...
 
 
+class LauncherOptions(StrEnum):
+    local = auto()
+    slurm = auto()
+
+
+def get_launcher(launcher_type: LauncherOptions) -> Launcher:
+    from cstar.orchestration.launch.local import LocalLauncher
+    from cstar.orchestration.launch.slurm import SlurmLauncher
+
+    lmap = {
+        LauncherOptions.local: LocalLauncher,
+        LauncherOptions.slurm: SlurmLauncher,
+    }
+    return lmap[launcher_type]()
+
+
 def cache_func(context: TaskRunContext, params):
     """Cache on a combination of the task name and user-assigned run id"""
     cache_key = (
@@ -189,7 +268,7 @@ class WorkTask:
                 self._handle = self.launch(launcher=None)
             except:
                 raise RuntimeError(
-                    "Tried to access handle for {self.name} before it exists, and couldn't restore it from cache."
+                    f"Tried to access handle for {self.name} before it exists, and couldn't restore it from cache."
                 )
         return self._handle
 
@@ -217,14 +296,12 @@ class WorkTask:
             sleep(15)
 
 
-def build_and_run(wp_path: Path | str):
-    from cstar.orchestration.launch.slurm import SlurmLauncher
-
-    launcher = SlurmLauncher()  # todo, figure out launcher from WP or env
+def build_and_run(wp_path: Path | str, launcher: LauncherOptions):
+    _launcher = get_launcher(launcher)
 
     wp = deserialize(Path(wp_path), Workplan)
     planner = Planner(wp)
-    orchestrator = Orchestrator(planner=planner, launcher=launcher)
+    orchestrator = Orchestrator(planner=planner, launcher=_launcher)
     orchestrator.run()
 
 
@@ -279,8 +356,21 @@ class Orchestrator:
         self.planner = planner
         self.launcher = launcher
 
+    def run(self) -> None:
+        # this isn't ideal but for now the dag structure is a little different
+        # since we rely on slurm deps for long-lived stuff and local is just
+        # in a toy mode, and we therefore rely on the prefect checks to manage
+        # the dependencies
+        from cstar.orchestration.launch.local import LocalLauncher
+        from cstar.orchestration.launch.slurm import SlurmLauncher
+
+        if isinstance(self.launcher, LocalLauncher):
+            self._run_local()
+        elif isinstance(self.launcher, SlurmLauncher):
+            self._run_slurm()
+
     @flow
-    def run(self):
+    def _run_slurm(self):
         # map step name to prefect futures for submission and check phases
         submissions = {}
         checks = {}
@@ -311,3 +401,27 @@ class Orchestrator:
 
         # wait on all checks to finish
         wait(list(checks.values()))
+
+    @flow
+    def _run_local(self):
+        # map step name to prefect futures for submission and check phases
+        submissions = {}
+        checks = {}
+
+        # submit everything for execution with dependencies
+        # use topological sort so that we don't reference dependencies (from submissions dict or trying to get a handle)
+        # before they've been submitted.
+        # note: we could probably skip nx if we implemented our prefect tasks as transactional, but this is easier
+        # for now. see https://docs.prefect.io/v3/advanced/transactions#write-your-first-transaction
+        for t in nx.topological_sort(self.planner.graph):
+            print(t)
+            print(f"launching {t.name}")
+            wait_for_dep_checks = [checks[dep.name] for dep in t.depends_on]
+            submissions[t.name] = t.launch.submit(
+                self.launcher, wait_for=wait_for_dep_checks
+            )
+            checks[t.name] = t.check.submit(
+                self.launcher, wait_for=[submissions[t.name]] + wait_for_dep_checks
+            )
+        # wait for everything
+        wait(list(submissions.values()) + list(checks.values()))

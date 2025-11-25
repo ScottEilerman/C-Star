@@ -45,7 +45,7 @@ test = [
 dev =["ruff"]
 
 [project.scripts]
-cstar = "cstar.cli.typer_cli:app"
+cstar = "cstar.cli.cli:app"
 
 [build-system]
 requires = [

@@ -5,7 +5,7 @@ from typing import Annotated
 import typer
 
 from cstar.orchestration.models import Workplan
-from cstar.orchestration.orchestration import Planner, build_and_run
+from cstar.orchestration.orchestration import LauncherOptions, Planner, build_and_run
 from cstar.orchestration.serialization import deserialize
 from cstar.orchestration.utils import render
 
@@ -13,7 +13,9 @@ app = typer.Typer()
 
 
 @app.command()
-def run(path: Path, name: str) -> None:
+def run(
+    path: Path, name: str, launcher: LauncherOptions = LauncherOptions.slurm
+) -> None:
     """
     Run the workplan using an ephemeral prefect server
 
@@ -31,7 +33,7 @@ def run(path: Path, name: str) -> None:
 
     os.environ["CSTAR_RUNID"] = name
 
-    build_and_run(path)
+    build_and_run(path, launcher=launcher)
 
 
 @app.command()
