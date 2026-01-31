@@ -1390,30 +1390,31 @@ class ROMSSimulation(Simulation):
 
     def _run_analysis(self, data_paths: list[Path]) -> None:
         """Execute analysis scripts registered to be executed after the simulation."""
-        if is_feature_enabled("CSTAR_FF_POSTRUN_ANALYSIS"):
-            analysis_dir = self.fs_manager.joined_output_dir.as_posix()
-            args: list[str] = [
-                "cstar-analysis",
-                "--output",
-                analysis_dir,
-                "--path",
-                Path(self.model_grid.source.location).as_posix(),
-            ]
-            for path in data_paths:
-                args.extend(["--path", path.resolve().as_posix()])
-            command = " ".join(args)
+        from roms_tools import Grid, ROMSOutput
+        import matplotlib.pyplot as plt
 
-            try:
-                _run_cmd(
-                    command,
-                    cwd=self.fs_manager.joined_output_dir,
-                    msg_pre=f"Running post-run analysis script at: {analysis_dir}",
-                    msg_post=f"Completed post-run analysis script at: {analysis_dir}",
-                    msg_err="Error occurred while executing post-run analysis.",
-                    raise_on_error=True,
-                )
-            except Exception:
-                self.log.exception("Post-run analysis script failed.")
+        grid_path = self.model_grid.source.location
+        rst_path = self.fs_manager.joined_output_dir / "output_rst*"
+        output_plot_path = self.fs_manager.joined_output_dir
+
+        grid = Grid.from_file(grid_path)
+        roms_output = ROMSOutput(
+            grid=grid,
+            path=rst_path,
+            use_dask=True,
+        )
+
+        temp_ds = roms_output.ds['ALK'].isel({"s_rho":-1, "eta_rho":11, "xi_rho":11})
+        temp_ds.plot(marker='.')
+        plt.savefig(str(output_plot_path/"time_ALK.png"))
+
+        roms_output.plot("ALK", time=1, s=-1, save_path=str(output_plot_path/"surface_ALK.png"))
+        roms_output.plot("temp", time=1, s=-1, save_path=str(output_plot_path/"surface_temp.png"))
+
+
+        
+        # roms_output.plot("ALK", lon=275, lat=22.25, s=-1, save_path=str(output_plot_path/"time_ALK.png"))
+        # roms_output.plot("temp", lon=275, lat=22.25, s=-1, save_path=str(output_plot_path/"time_temp.png"))
 
     def pre_run(self, overwrite_existing_files=False) -> None:
         """Perform pre-processing steps needed to run the ROMS simulation.

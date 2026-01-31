@@ -217,9 +217,14 @@ class _AnvilSystemContext(_SystemContext):
             query_name="part-debug",
             max_walltime_method=query_max_walltime_via_sacctmgr,
         )
+        highmem_q = SlurmPartition(
+            name="highmem",
+            query_name="part-highmem",
+            max_walltime_method=query_max_walltime_via_sacctmgr,
+        )
 
         return SlurmScheduler(
-            queues=[regular_q, shared_q, debug_q],
+            queues=[regular_q, shared_q, debug_q, highmem_q],
             primary_queue_name="wholenode",
             other_scheduler_directives={},
             requires_task_distribution=False,
